@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Chez Meh</title>
+<link rel="manifest" href="/manifest.json">
+<meta name="theme-color" content="#172033">
+<link rel="icon" href="/icon-192.png">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,800&family=DM+Sans:wght@400;700&display=swap">
+<style>
+:root { --bg:#F4F5F1; --surface:#fff; --ink:#172033; --muted:#5C667A; --line:#D9DDD3; --food:#C2410C; --warn:#9A3412; color-scheme: light; }
+@media (prefers-color-scheme: dark) { :root { --bg:#12151C; --surface:#1B2030; --ink:#ECEFF5; --muted:#9AA3B5; --line:#2C3347; --food:#FF8A57; --warn:#FDBA74; color-scheme: dark; } }
+* { box-sizing: border-box; }
+html { background: var(--bg); }
+body { margin: 0; min-height: 100vh; display: grid; place-items: center; background: var(--bg); color: var(--ink); font: 16px/1.45 "DM Sans", system-ui, sans-serif; padding: 16px; }
+main { width: 100%; max-width: 360px; display: grid; gap: 14px; }
+h1 { font: 800 2.4rem "Bricolage Grotesque", "Avenir Next", sans-serif; letter-spacing: -.02em; margin: 0; line-height: 1; }
+h1 span { color: var(--food); }
+p { margin: 0; color: var(--muted); }
+input { width: 100%; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 12px; min-height: 48px; }
+button { font: 700 1rem "DM Sans", sans-serif; background: var(--ink); color: var(--bg); border: 0; border-radius: 8px; padding: 13px; min-height: 48px; cursor: pointer; width: 100%; }
+button:disabled { opacity: .5; }
+input:focus-visible, button:focus-visible { outline: 3px solid #0B7A75; outline-offset: 2px; }
+.err { color: var(--warn); font-weight: 500; }
+form { display: grid; gap: 12px; }
+</style></head><body>
+<main>
+  <h1>Chez <span>Meh</span></h1>
+  <p>Enter the passphrase. You'll only need it again after 30 days.</p>
+  <form id="f">
+    <input type="password" id="pw" autocomplete="current-password" placeholder="Passphrase" aria-label="Passphrase" autofocus>
+    <p class="err" id="err" role="alert" hidden></p>
+    <button type="submit" id="go">Open the diary</button>
+  </form>
+</main>
+<script>
+document.getElementById("f").addEventListener("submit", async function (e) {
+  e.preventDefault();
+  var b = document.getElementById("go"), er = document.getElementById("err");
+  b.disabled = true; er.hidden = true;
+  try {
+    var r = await fetch("/api/login", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ passphrase: document.getElementById("pw").value }) });
+    if (r.ok) { location.href = "/"; return; }
+    er.textContent = r.status === 401 ? "That passphrase didn't match." : "Something went wrong. Try again.";
+  } catch (x) { er.textContent = "Could not reach the server."; }
+  er.hidden = false; b.disabled = false;
+});
+</script>
+</body></html>

@@ -443,12 +443,15 @@ html.rcopen body { overflow: hidden; }
     return s;
   }
 
+  function skippedNote() {
+    return L.skipped ? '<div class="banner">Skipped <b>' + h(L.skipped.d.item.trim() || "a dish") + '</b>. <button type="button" class="link" data-act="unskip">Undo</button></div>' : "";
+  }
   function visitLine() { return h(L.cuisine) + " · " + h(L.restaurant) + " · " + svcLabel(); }
   function viewDish() {
     var d = L.dishes[L.cur], n = L.dishes.length, last = L.cur === n - 1;
     var dots = ""; for (var i = 0; i < n; i++) dots += '<i class="' + (i === L.cur ? "on" : (i < L.cur ? "done" : "")) + '"></i>';
     var s = '<div class="flow"><div class="stephead"><h2>Dish ' + (L.cur + 1) + " of " + n + '</h2><div class="dots" aria-hidden="true">' + dots + "</div></div>";
-    s += '<div class="meta">' + visitLine() + "</div>";
+    s += '<div class="meta">' + visitLine() + "</div>" + skippedNote();
     s += '<div class="field" data-k="rater"><span class="lbl">Who is rating?</span><div class="chips">' + RATERS.map(function (r) { return chip("rater", r, r, d.rater === r); }).join("") + "</div>";
     if (d.rater === "Guest") s += '<input type="text" id="d-guest" data-d="guest" value="' + h(d.guest) + '" placeholder="Guest\'s name (optional)" autocomplete="off" aria-label="Guest name">';
     s += "</div>";
@@ -460,12 +463,13 @@ html.rcopen body { overflow: hidden; }
     s += '<p class="err" id="logErr" role="alert"' + (L.err ? "" : " hidden") + ">" + h(L.err) + "</p>";
     s += '<div class="actions"><button class="btn alt" type="button" data-act="dishBack">Back</button>' +
       (last ? '<button class="btn alt" type="button" data-act="addDish">+ Add another dish</button>' : '<button class="btn alt" type="button" data-act="dishNext">Next dish</button>') +
-      '<button class="btn" type="button" data-act="toReview">Review &amp; save</button></div></div>';
+      '<button class="btn" type="button" data-act="toReview">Review &amp; save</button></div>' +
+      (n > 1 ? '<div class="row"><button type="button" class="link" data-act="skipDish">Skip this dish</button> <span class="hint">leaves it out of the diary</span></div>' : "") + "</div>";
     return s;
   }
 
   function viewReview() {
-    var s = '<div class="flow"><h2>Review</h2><div class="confirm"><div><b>' + h(L.restaurant) + '</b><div class="meta">' + h(L.cuisine) + " · " + svcLabel() + " · " + fmtDate(nyISO(L.when)) + "</div></div>";
+    var s = '<div class="flow"><h2>Review</h2>' + skippedNote() + '<div class="confirm"><div><b>' + h(L.restaurant) + '</b><div class="meta">' + h(L.cuisine) + " · " + svcLabel() + " · " + fmtDate(nyISO(L.when)) + "</div></div>";
     if (L.service === "delivery") {
       s += L.delivLog === "yes"
         ? '<div class="meta"><span class="badge deliv">Delivery</span> ' + h(L.app) + " " + pips(L.drate, "deliv") + (L.dcomment ? " · " + h(L.dcomment) : "") + "</div>"
@@ -620,7 +624,14 @@ html.rcopen body { overflow: hidden; }
     addDish: function () { var m = dishMissing(L.dishes[L.cur]); if (m.length) return flag(m, dishPrefix(L.cur)); L.dishes.push(newDish(L.dishes[L.cur].rater)); L.cur = L.dishes.length - 1; go("dish"); },
     toReview: function () { var p = firstProblem(); if (!p) return go("review"); if (p.phase === "dish" && p.cur === L.cur) return flag(p.list, p.prefix); bounce(p); },
     editDish: function (v, el) { L.cur = +el.getAttribute("data-i"); go("dish"); },
-    removeDish: function (v, el) { var i = +el.getAttribute("data-i"); if (L.dishes.length > 1) { L.dishes.splice(i, 1); L.cur = Math.min(L.cur, L.dishes.length - 1); } renderLog(); },
+    removeDish: function (v, el) { var i = +el.getAttribute("data-i"); if (L.dishes.length > 1) { L.skipped = { d: L.dishes.splice(i, 1)[0], i: i }; L.cur = Math.min(L.cur, L.dishes.length - 1); } renderLog(); },
+    skipDish: function () { // leave this dish out (the bag of chips); Undo brings it back
+      if (L.dishes.length < 2) return;
+      var i = L.cur; L.skipped = { d: L.dishes.splice(i, 1)[0], i: i };
+      if (i >= L.dishes.length) { L.cur = L.dishes.length - 1; var p = firstProblem(); return p ? bounce(p) : go("review"); } // skipped the last one: on to review
+      L.cur = i; if (i > 0 && !L.dishes[i].rater) L.dishes[i].rater = L.dishes[i - 1].rater; go("dish");
+    },
+    unskip: function () { var k = L.skipped; if (!k) return; L.dishes.splice(k.i, 0, k.d); L.skipped = null; if (L.phase === "review") renderLog(); else { L.cur = k.i; go("dish"); } },
     backToDishes: function () { L.cur = L.dishes.length - 1; go("dish"); },
     save: function () { saveAll(); },
     copy: function () { var ta = $("pendingTa"); if (!ta) return; ta.select(); if (navigator.clipboard) navigator.clipboard.writeText(L.pending).catch(function () {}); },

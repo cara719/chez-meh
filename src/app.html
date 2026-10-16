@@ -121,6 +121,8 @@ html.rcopen body { overflow: hidden; }
 .rcimg { max-width: 100%; max-height: 180px; border-radius: 8px; border: 1px solid var(--line); justify-self: start; }
 .banner ul { margin: 6px 0 0; padding-left: 18px; }
 .flow > .banner { margin-top: 0; }
+.field.miss { border-left: 4px solid var(--warn); padding-left: 10px; }
+.field.miss > .lbl, .field.miss > label { color: var(--warn); }
 .editbox { display: grid; gap: 16px; border: 2px solid var(--ink); border-radius: 10px; padding: 14px; background: var(--bg); }
 .grp { font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 4px 0 0; font-weight: 700; }
 .confirmdel { background: var(--food-soft); border-radius: 8px; padding: 10px 12px; display: grid; gap: 8px; }
@@ -365,7 +367,7 @@ html.rcopen body { overflow: hidden; }
   }
   function typeChooser(cuisine, cur, isNew, actPick, actNew, attr, id) {
     var list = typesFor(cuisine), adding = isNew || !list.length;
-    var s = '<div class="field"><span class="lbl">Type of dish <span class="hint">what it is, such as Italian sub</span></span><div class="chips">' +
+    var s = '<div class="field" data-k="type"><span class="lbl">Type of dish <span class="hint">what it is, such as Italian sub</span></span><div class="chips">' +
       list.map(function (t) { return chip(actPick, t.name, t.name, !adding && norm(cur) === norm(t.name), "<small>" + t.count + "</small>"); }).join("") +
       chip(actNew, "", "+ New type", adding) + "</div>";
     if (adding) s += '<input type="text" id="' + id + '" ' + attr + ' list="dl-type" value="' + h(cur) + '" placeholder="e.g. Italian sub" autocomplete="off" aria-label="New dish type">';
@@ -410,14 +412,14 @@ html.rcopen body { overflow: hidden; }
         (L.hint && !L.restaurant.trim() ? "<br>Restaurant on the receipt: <b>" + h(L.hint) + "</b>" : "") +
         (L.receiptNotes && L.receiptNotes.length ? "<ul>" + L.receiptNotes.map(function (n) { return "<li>" + h(n) + "</li>"; }).join("") + "</ul>" : "") + "</div>";
     }
-    s += '<div class="field"><span class="lbl">Cuisine</span><div class="chips">' +
+    s += '<div class="field" data-k="cuisine"><span class="lbl">Cuisine</span><div class="chips">' +
       cl.map(function (c) { return chip("cuisine", c, c, !L.cuisineOther && norm(L.cuisine) === norm(c)); }).join("") +
       chip("cuisineOther", "", "Other…", L.cuisineOther) + "</div>";
     if (L.cuisineOther) s += '<input type="text" id="f-cuisine" data-f="cuisine" value="' + h(L.cuisine) + '" placeholder="Type a cuisine" autocomplete="off" aria-label="Other cuisine">';
     s += "</div>";
     if (L.cuisine.trim() || L.cuisineOther) {
       var rs = restaurantsFor(L.cuisine), adding = L.addingNew || !rs.length;
-      s += '<div class="field"><span class="lbl">Restaurant</span><div class="chips">' +
+      s += '<div class="field" data-k="restaurant"><span class="lbl">Restaurant</span><div class="chips">' +
         rs.map(function (r) { return chip("rest", r.name, r.name, !adding && norm(L.restaurant) === norm(r.name), "<small>" + r.count + "</small>"); }).join("") +
         chip("restNew", "", "+ New restaurant", adding) + "</div>";
       if (adding) s += '<input type="text" id="f-restaurant" data-f="restaurant" list="dl-rest" value="' + h(L.restaurant) + '" placeholder="Restaurant name" autocomplete="off" aria-label="New restaurant name">';
@@ -425,16 +427,16 @@ html.rcopen body { overflow: hidden; }
       s += '<div class="field"><span class="lbl">How did you eat?</span><div class="chips">' +
         chip("service", "delivery", "Delivery", L.service === "delivery") + chip("service", "dine_in", "Dine-in", L.service === "dine_in") + "</div></div>";
       if (L.service === "delivery") {
-        s += '<div class="field"><span class="lbl">Log delivery details too?</span><div class="chips">' +
+        s += '<div class="field" data-k="delivLog"><span class="lbl">Log delivery details too?</span><div class="chips">' +
           chip("delivLog", "yes", "Yes", L.delivLog === "yes") + chip("delivLog", "no", "No, food only", L.delivLog === "no") + "</div></div>";
         if (L.delivLog === "yes") {
-          s += '<div class="deliv-box"><div class="field"><span class="lbl">Delivery app</span>' + appChooser(L.app, L.appOther, "app", "appOther", 'data-f="app"', "f-app") + "</div>" +
-            '<div class="field"><span class="lbl">Delivery rating <span class="hint">1 to 5, about the delivery service only</span></span>' + rateBtns("drate", L.drate, "deliv") + "</div>" +
-            '<div class="field"><label for="f-dcomment">Delivery comment</label><textarea id="f-dcomment" data-f="dcomment"' + (L.dnone ? " disabled" : "") + ' placeholder="On time? Packaging? Driver?">' + h(L.dcomment) + '</textarea>' +
+          s += '<div class="deliv-box"><div class="field" data-k="app"><span class="lbl">Delivery app</span>' + appChooser(L.app, L.appOther, "app", "appOther", 'data-f="app"', "f-app") + "</div>" +
+            '<div class="field" data-k="drate"><span class="lbl">Delivery rating <span class="hint">1 to 5, about the delivery service only</span></span>' + rateBtns("drate", L.drate, "deliv") + "</div>" +
+            '<div class="field" data-k="dcomment"><label for="f-dcomment">Delivery comment</label><textarea id="f-dcomment" data-f="dcomment"' + (L.dnone ? " disabled" : "") + ' placeholder="On time? Packaging? Driver?">' + h(L.dcomment) + '</textarea>' +
             '<label class="check"><input type="checkbox" id="f-dnone" data-f="dnone"' + (L.dnone ? " checked" : "") + "> No comment</label></div></div>";
         }
       }
-      s += '<div class="field"><label for="f-when">When <span class="hint">New York time</span></label><input type="datetime-local" id="f-when" data-f="when" value="' + h(L.when) + '"></div>';
+      s += '<div class="field" data-k="when"><label for="f-when">When <span class="hint">New York time</span></label><input type="datetime-local" id="f-when" data-f="when" value="' + h(L.when) + '"></div>';
     }
     s += '<p class="err" id="logErr" role="alert"' + (L.err ? "" : " hidden") + ">" + h(L.err) + "</p>";
     s += '<button class="btn" type="button" data-act="toDishes">Next: add dishes</button></div>';
@@ -447,13 +449,13 @@ html.rcopen body { overflow: hidden; }
     var dots = ""; for (var i = 0; i < n; i++) dots += '<i class="' + (i === L.cur ? "on" : (i < L.cur ? "done" : "")) + '"></i>';
     var s = '<div class="flow"><div class="stephead"><h2>Dish ' + (L.cur + 1) + " of " + n + '</h2><div class="dots" aria-hidden="true">' + dots + "</div></div>";
     s += '<div class="meta">' + visitLine() + "</div>";
-    s += '<div class="field"><span class="lbl">Who is rating?</span><div class="chips">' + RATERS.map(function (r) { return chip("rater", r, r, d.rater === r); }).join("") + "</div>";
+    s += '<div class="field" data-k="rater"><span class="lbl">Who is rating?</span><div class="chips">' + RATERS.map(function (r) { return chip("rater", r, r, d.rater === r); }).join("") + "</div>";
     if (d.rater === "Guest") s += '<input type="text" id="d-guest" data-d="guest" value="' + h(d.guest) + '" placeholder="Guest\'s name (optional)" autocomplete="off" aria-label="Guest name">';
     s += "</div>";
     s += typeChooser(L.cuisine, d.type, d.typeNew, "typePick", "typeNew", 'data-d="type"', "d-type");
-    s += '<div class="field"><label for="d-item">Dish name <span class="hint">as the menu calls it</span></label><input type="text" id="d-item" data-d="item" list="dl-item" value="' + h(d.item) + '" placeholder="e.g. The Stallion" autocomplete="off"></div>';
-    s += '<div class="field"><span class="lbl">Food rating <span class="hint">1 to 5, about the food only</span></span>' + rateBtns("rating", d.rating, "food") + "</div>";
-    s += '<div class="field"><label for="d-comment">Food comment</label><textarea id="d-comment" data-d="comment"' + (d.none ? " disabled" : "") + ' placeholder="What stood out?">' + h(d.comment) + '</textarea>' +
+    s += '<div class="field" data-k="item"><label for="d-item">Dish name <span class="hint">as the menu calls it</span></label><input type="text" id="d-item" data-d="item" list="dl-item" value="' + h(d.item) + '" placeholder="e.g. The Stallion" autocomplete="off"></div>';
+    s += '<div class="field" data-k="rating"><span class="lbl">Food rating <span class="hint">1 to 5, about the food only</span></span>' + rateBtns("rating", d.rating, "food") + "</div>";
+    s += '<div class="field" data-k="comment"><label for="d-comment">Food comment</label><textarea id="d-comment" data-d="comment"' + (d.none ? " disabled" : "") + ' placeholder="What stood out?">' + h(d.comment) + '</textarea>' +
       '<label class="check"><input type="checkbox" id="d-none" data-d="none"' + (d.none ? " checked" : "") + "> No comment</label></div>";
     s += '<p class="err" id="logErr" role="alert"' + (L.err ? "" : " hidden") + ">" + h(L.err) + "</p>";
     s += '<div class="actions"><button class="btn alt" type="button" data-act="dishBack">Back</button>' +
@@ -490,37 +492,68 @@ html.rcopen body { overflow: hidden; }
   }
 
   function renderLog(noScroll) {
+    if (L.flagged) syncFlag();
     var v = L.phase === "setup" ? viewSetup() : L.phase === "dish" ? viewDish() : L.phase === "review" ? viewReview() : viewDone();
     $("logRoot").innerHTML = v;
+    if (L.flagged) markFlag();
   }
   function go(phase) {
-    L.phase = phase; L.err = ""; renderLog();
+    L.phase = phase; L.err = ""; L.flagged = false; renderLog();
     var nav = document.querySelector("nav.tabs"); if (nav && nav.scrollIntoView) nav.scrollIntoView({ block: "start" });
   }
   function setErr(msg) { L.err = msg; var e = $("logErr"); if (e) { e.textContent = msg; e.hidden = !msg; } }
 
-  function checkSetup() {
-    if (!L.cuisine.trim()) return "Pick a cuisine.";
-    if (!L.restaurant.trim()) return "Pick a restaurant or add a new one.";
+  // Every check returns the full list of what is missing, as [{ k: field key, t: words for the message }].
+  function setupMissing() {
+    var m = [];
+    if (!L.cuisine.trim()) return [{ k: "cuisine", t: "the cuisine" }]; // the rest of the form appears after this
+    if (!L.restaurant.trim()) m.push({ k: "restaurant", t: "the restaurant" });
     if (L.service === "delivery") {
-      if (!L.delivLog) return "Choose whether to log delivery details.";
+      if (!L.delivLog) m.push({ k: "delivLog", t: "whether to log delivery details" });
       if (L.delivLog === "yes") {
-        if (!L.app.trim()) return "Enter the delivery app.";
-        if (!(L.drate >= 1 && L.drate <= 5)) return "Pick a delivery rating from 1 to 5.";
-        if (!L.dcomment.trim() && !L.dnone) return "Add a delivery comment, or tick No comment.";
+        if (!L.app.trim()) m.push({ k: "app", t: "the delivery app" });
+        if (!(L.drate >= 1 && L.drate <= 5)) m.push({ k: "drate", t: "a delivery rating from 1 to 5" });
+        if (!L.dcomment.trim() && !L.dnone) m.push({ k: "dcomment", t: "a delivery comment, or tick No comment" });
       }
     }
-    if (!nyISO(L.when)) return "Enter when you ate.";
-    return "";
+    if (!nyISO(L.when)) m.push({ k: "when", t: "when you ate" });
+    return m;
   }
-  function checkDish(d) {
-    if (!d.rater) return "Choose who is rating.";
-    if (!d.type.trim()) return "Pick the type of dish, or add a new one.";
-    if (!d.item.trim()) return "Enter the dish name.";
-    if (!(d.rating >= 1 && d.rating <= 5)) return "Pick a food rating from 1 to 5.";
-    if (!d.comment.trim() && !d.none) return "Add a food comment, or tick No comment.";
-    return "";
+  function dishMissing(d) {
+    var m = [];
+    if (!d.rater) m.push({ k: "rater", t: "who is rating" });
+    if (!d.type.trim()) m.push({ k: "type", t: "the type of dish" });
+    if (!d.item.trim()) m.push({ k: "item", t: "the dish name" });
+    if (!(d.rating >= 1 && d.rating <= 5)) m.push({ k: "rating", t: "a food rating from 1 to 5" });
+    if (!d.comment.trim() && !d.none) m.push({ k: "comment", t: "a food comment, or tick No comment" });
+    return m;
   }
+  function dishPrefix(i) { var n = L.dishes.length, it = L.dishes[i].item.trim(); return n > 1 ? "Dish " + (i + 1) + " of " + n + (it ? " (" + it + ")" : "") + ": " : ""; }
+  function curMissing() { return L.phase === "setup" ? setupMissing() : L.phase === "dish" ? dishMissing(L.dishes[L.cur]) : []; }
+  function stillFlagged() { return curMissing().filter(function (x) { return L.flagKeys.indexOf(x.k) > -1; }); } // only what was flagged, not fields that appear later
+  function msgFor(list) { return (L.flagPrefix || "") + "Still needed: " + list.map(function (x) { return x.t; }).join("; ") + "."; }
+  function flag(list, prefix) { // say what is missing, mark those fields, and bring the message into view
+    L.flagged = true; L.flagKeys = list.map(function (x) { return x.k; }); L.flagPrefix = prefix || "";
+    setErr(msgFor(list)); markFlag();
+    var e = $("logErr"); if (e && e.scrollIntoView) e.scrollIntoView({ block: "nearest", behavior: "smooth" });
+  }
+  function markFlag() {
+    Array.prototype.forEach.call(document.querySelectorAll("#logRoot .miss"), function (n) { n.classList.remove("miss"); });
+    stillFlagged().forEach(function (x) { var n = document.querySelector('#logRoot [data-k="' + x.k + '"]'); if (n) n.classList.add("miss"); });
+  }
+  function liveFlag() { // while typing: keep the message and marks current without redrawing the card
+    if (!L.flagged) return;
+    syncFlag(); var e = $("logErr"); if (e) { e.textContent = L.err; e.hidden = !L.err; } markFlag();
+  }
+  function syncFlag() { // after any redraw: fixed fields drop out of the message and lose their mark
+    var m = stillFlagged(); if (!m.length) { L.flagged = false; L.err = ""; } else L.err = msgFor(m);
+  }
+  function firstProblem() { // the first setup or dish problem in the whole visit, so nothing half-finished is ever sent
+    var m = setupMissing(); if (m.length) return { phase: "setup", list: m, prefix: "" };
+    for (var i = 0; i < L.dishes.length; i++) { var dm = dishMissing(L.dishes[i]); if (dm.length) return { phase: "dish", cur: i, list: dm, prefix: dishPrefix(i) }; }
+    return null;
+  }
+  function bounce(p) { if (p.phase === "dish") L.cur = p.cur; go(p.phase); flag(p.list, p.prefix); }
   function recFor(d) {
     var r = {
       entry_id: d.id, visit_id: L.visit, occurred_at: nyISO(L.when), created_by: null,
@@ -539,6 +572,7 @@ html.rcopen body { overflow: hidden; }
 
   async function saveAll() {
     if (L.saving) return;
+    var problem = firstProblem(); if (problem) return bounce(problem);
     L.saving = true; L.err = ""; L.pending = null; renderLog();
     var saved = [], failed = [], why = "";
     for (var i = 0; i < L.dishes.length; i++) {
@@ -554,7 +588,7 @@ html.rcopen body { overflow: hidden; }
     }
     L.saving = false;
     if (!failed.length) { L.phase = "done"; L.savedRecs = saved; }
-    else { L.err = "Saved " + saved.length + " of " + L.dishes.length + ". " + why + " Nothing is lost: tap Save again to retry the rest."; L.pending = JSON.stringify(failed, null, 2); }
+    else { L.err = "Saved " + saved.length + " of " + L.dishes.length + ". Not saved: " + failed.map(function (f) { return f.item; }).join(", ") + ". " + why + " Nothing is lost: tap Save again to retry the rest."; L.pending = JSON.stringify(failed, null, 2); }
     fillLists(); renderDiary(); renderLog();
   }
 
@@ -575,13 +609,16 @@ html.rcopen body { overflow: hidden; }
     appOther: function () { L.appOther = true; L.app = ""; L.err = ""; renderLog(); var i = $("f-app"); if (i) i.focus(); },
     typePick: function (v) { var d = L.dishes[L.cur]; d.type = v; d.typeNew = false; L.err = ""; renderLog(); },
     typeNew: function () { var d = L.dishes[L.cur]; d.type = ""; d.typeNew = true; L.err = ""; renderLog(); var i = $("d-type"); if (i) i.focus(); },
-    toDishes: function () { var e = checkSetup(); if (e) return setErr(e); L.cur = 0; go("dish"); },
+    toDishes: function () { var m = setupMissing(); if (m.length) return flag(m); L.cur = 0; go("dish"); },
     rater: function (v) { L.dishes[L.cur].rater = v; renderLog(); },
     rating: function (v) { L.dishes[L.cur].rating = +v; renderLog(); },
     dishBack: function () { if (L.cur > 0) { L.cur--; go("dish"); } else go("setup"); },
-    dishNext: function () { var e = checkDish(L.dishes[L.cur]); if (e) return setErr(e); L.cur++; go("dish"); },
-    addDish: function () { var e = checkDish(L.dishes[L.cur]); if (e) return setErr(e); L.dishes.push(newDish(L.dishes[L.cur].rater)); L.cur = L.dishes.length - 1; go("dish"); },
-    toReview: function () { var e = checkDish(L.dishes[L.cur]); if (e) return setErr(e); go("review"); },
+    dishNext: function () {
+      var m = dishMissing(L.dishes[L.cur]); if (m.length) return flag(m, dishPrefix(L.cur));
+      var prev = L.dishes[L.cur].rater; L.cur++; if (!L.dishes[L.cur].rater) L.dishes[L.cur].rater = prev; go("dish"); // same rater carries forward
+    },
+    addDish: function () { var m = dishMissing(L.dishes[L.cur]); if (m.length) return flag(m, dishPrefix(L.cur)); L.dishes.push(newDish(L.dishes[L.cur].rater)); L.cur = L.dishes.length - 1; go("dish"); },
+    toReview: function () { var p = firstProblem(); if (!p) return go("review"); if (p.phase === "dish" && p.cur === L.cur) return flag(p.list, p.prefix); bounce(p); },
     editDish: function (v, el) { L.cur = +el.getAttribute("data-i"); go("dish"); },
     removeDish: function (v, el) { var i = +el.getAttribute("data-i"); if (L.dishes.length > 1) { L.dishes.splice(i, 1); L.cur = Math.min(L.cur, L.dishes.length - 1); } renderLog(); },
     backToDishes: function () { L.cur = L.dishes.length - 1; go("dish"); },
@@ -598,12 +635,14 @@ html.rcopen body { overflow: hidden; }
     var t = ev.target, f = t.getAttribute("data-f"), d = t.getAttribute("data-d");
     if (f && t.type !== "checkbox") { L[f] = t.value; }
     if (d && t.type !== "checkbox") { L.dishes[L.cur][d] = t.value; }
+    liveFlag();
   });
   root.addEventListener("change", function (ev) {
     var t = ev.target, f = t.getAttribute("data-f"), d = t.getAttribute("data-d");
     if (t.type === "checkbox" && f === "dnone") { L.dnone = t.checked; var ta = $("f-dcomment"); ta.disabled = t.checked; if (t.checked) { ta.value = ""; L.dcomment = ""; } }
     if (t.type === "checkbox" && d === "none") { var dd = L.dishes[L.cur]; dd.none = t.checked; var tb = $("d-comment"); tb.disabled = t.checked; if (t.checked) { tb.value = ""; dd.comment = ""; } }
     if (f === "when") L.when = t.value;
+    liveFlag();
   });
 
   /* ---------- Diary tab: edit and delete ---------- */
@@ -621,50 +660,55 @@ html.rcopen body { overflow: hidden; }
   function editForm(e) {
     var f = ED.f, n = ED.n;
     var s = '<div class="editbox"><h2>Edit dish</h2>';
-    s += '<div class="field"><span class="lbl">Who rated?' + (ED.legacy ? ' <span class="hint">not recorded</span>' : "") + '</span><div class="chips">' +
+    s += '<div class="field" data-k="rater"><span class="lbl">Who rated?' + (ED.legacy ? ' <span class="hint">not recorded</span>' : "") + '</span><div class="chips">' +
       RATERS.map(function (r) { return chip("eRater", r, r, f.rater === r); }).join("") + "</div>";
     if (f.rater === "Guest") s += '<input type="text" data-e="guest" value="' + h(f.guest) + '" placeholder="Guest\'s name (optional)" autocomplete="off" aria-label="Guest name">';
     s += "</div>";
     s += typeChooser(f.cuisine, f.type, f.typeNew, "eTypePick", "eTypeNew", 'data-e="type"', "e-type");
-    s += '<div class="field"><label for="e-item">Dish name <span class="hint">as the menu calls it</span></label><input type="text" id="e-item" data-e="item" list="dl-item" value="' + h(f.item) + '" autocomplete="off"></div>';
-    s += '<div class="field"><span class="lbl">Food rating</span>' + rateBtns("eRating", f.rating, "food") + "</div>";
+    s += '<div class="field" data-k="item"><label for="e-item">Dish name <span class="hint">as the menu calls it</span></label><input type="text" id="e-item" data-e="item" list="dl-item" value="' + h(f.item) + '" autocomplete="off"></div>';
+    s += '<div class="field" data-k="rating"><span class="lbl">Food rating</span>' + rateBtns("eRating", f.rating, "food") + "</div>";
     s += '<div class="field"><label for="e-comment">Food comment</label><textarea id="e-comment" data-e="comment">' + h(f.comment) + "</textarea></div>";
     s += '<h3 class="grp">Visit details' + (n > 1 ? ' <span class="hint">apply to all ' + n + " dishes from this visit</span>" : "") + "</h3>";
-    s += '<div class="field"><label for="e-cuisine">Cuisine</label><input type="text" id="e-cuisine" data-e="cuisine" list="dl-cuisine" value="' + h(f.cuisine) + '" autocomplete="off"></div>';
-    s += '<div class="field"><label for="e-rest">Restaurant</label><input type="text" id="e-rest" data-e="restaurant" list="dl-rest" value="' + h(f.restaurant) + '" autocomplete="off"></div>';
+    s += '<div class="field" data-k="cuisine"><label for="e-cuisine">Cuisine</label><input type="text" id="e-cuisine" data-e="cuisine" list="dl-cuisine" value="' + h(f.cuisine) + '" autocomplete="off"></div>';
+    s += '<div class="field" data-k="restaurant"><label for="e-rest">Restaurant</label><input type="text" id="e-rest" data-e="restaurant" list="dl-rest" value="' + h(f.restaurant) + '" autocomplete="off"></div>';
     s += '<div class="field"><span class="lbl">How did you eat?</span><div class="chips">' + chip("eService", "delivery", "Delivery", f.service === "delivery") + chip("eService", "dine_in", "Dine-in", f.service === "dine_in") + "</div></div>";
     if (f.service === "delivery") {
       s += '<div class="field"><span class="lbl">Delivery details logged?</span><div class="chips">' + chip("eDelivLog", "yes", "Yes", f.delivLog === "yes") + chip("eDelivLog", "no", "No", f.delivLog !== "yes") + "</div></div>";
       if (f.delivLog === "yes") {
-        s += '<div class="deliv-box"><div class="field"><span class="lbl">Delivery app</span>' + appChooser(f.app, f.appOther, "eApp", "eAppOther", 'data-e="app"', "e-app") + "</div>" +
-          '<div class="field"><span class="lbl">Delivery rating</span>' + rateBtns("eDrate", f.drate, "deliv") + "</div>" +
+        s += '<div class="deliv-box"><div class="field" data-k="app"><span class="lbl">Delivery app</span>' + appChooser(f.app, f.appOther, "eApp", "eAppOther", 'data-e="app"', "e-app") + "</div>" +
+          '<div class="field" data-k="drate"><span class="lbl">Delivery rating</span>' + rateBtns("eDrate", f.drate, "deliv") + "</div>" +
           '<div class="field"><label for="e-dcomment">Delivery comment</label><textarea id="e-dcomment" data-e="dcomment">' + h(f.dcomment) + "</textarea></div></div>";
       }
     }
-    s += '<div class="field"><label for="e-when">When <span class="hint">New York time</span></label><input type="datetime-local" id="e-when" data-e="when" value="' + h(f.when) + '"></div>';
+    s += '<div class="field" data-k="when"><label for="e-when">When <span class="hint">New York time</span></label><input type="datetime-local" id="e-when" data-e="when" value="' + h(f.when) + '"></div>';
     s += '<p class="err" role="alert"' + (ED.err ? "" : " hidden") + ">" + h(ED.err) + "</p>";
     s += '<div class="actions"><button type="button" class="btn alt" data-act="eCancel"' + (ED.saving ? " disabled" : "") + '>Cancel</button><button type="button" class="btn" data-act="eSave"' + (ED.saving ? " disabled" : "") + ">" + (ED.saving ? "Saving…" : "Save changes") + "</button></div>";
     s += '<div class="row"><button type="button" class="link" data-act="del" data-id="' + h(e.entry_id) + '">Delete this dish</button></div></div>';
     return s;
   }
-  function checkEdit() {
-    var f = ED.f;
-    if (!f.type.trim() && !ED.legacyType) return "Pick the type of dish, or add a new one.";
-    if (!f.item.trim()) return "Enter the dish name.";
-    if (!(f.rating >= 1 && f.rating <= 5)) return "Pick a food rating from 1 to 5.";
-    if (!f.rater && !ED.legacy) return "Choose who rated.";
-    if (!f.cuisine.trim()) return "Enter a cuisine.";
-    if (!f.restaurant.trim()) return "Enter the restaurant.";
-    if (!nyISO(f.when)) return "Enter when you ate.";
+  function editMissing() {
+    var f = ED.f, m = [];
+    if (!f.rater && !ED.legacy) m.push({ k: "rater", t: "who rated" });
+    if (!f.type.trim() && !ED.legacyType) m.push({ k: "type", t: "the type of dish" });
+    if (!f.item.trim()) m.push({ k: "item", t: "the dish name" });
+    if (!(f.rating >= 1 && f.rating <= 5)) m.push({ k: "rating", t: "a food rating from 1 to 5" });
+    if (!f.cuisine.trim()) m.push({ k: "cuisine", t: "the cuisine" });
+    if (!f.restaurant.trim()) m.push({ k: "restaurant", t: "the restaurant" });
     if (f.service === "delivery" && f.delivLog === "yes") {
-      if (!f.app.trim()) return "Enter the delivery app.";
-      if (!(f.drate >= 1 && f.drate <= 5)) return "Pick a delivery rating from 1 to 5.";
+      if (!f.app.trim()) m.push({ k: "app", t: "the delivery app" });
+      if (!(f.drate >= 1 && f.drate <= 5)) m.push({ k: "drate", t: "a delivery rating from 1 to 5" });
     }
-    return "";
+    if (!nyISO(f.when)) m.push({ k: "when", t: "when you ate" });
+    return m;
+  }
+  function showEditErr(keys) { // after the diary redraws: mark the fields and bring the message into view
+    var box = document.querySelector("#diary .editbox"); if (!box) return;
+    (keys || []).forEach(function (k) { var n = box.querySelector('[data-k="' + k + '"]'); if (n) n.classList.add("miss"); });
+    var e = box.querySelector(".err"); if (e && e.scrollIntoView) e.scrollIntoView({ block: "nearest", behavior: "smooth" });
   }
   async function saveEdit() {
     if (ED.saving) return;
-    var bad = checkEdit(); if (bad) { ED.err = bad; renderDiary(true); return; }
+    var miss = editMissing(); if (miss.length) { ED.err = "Still needed: " + miss.map(function (x) { return x.t; }).join("; ") + "."; renderDiary(true); showEditErr(miss.map(function (x) { return x.k; })); return; }
     var f = ED.f, withDel = f.service === "delivery" && f.delivLog === "yes";
     var rec = {
       entry_id: ED.id, visit_id: ED.visit, occurred_at: nyISO(f.when), rated_by: f.rater, rater_name: f.rater === "Guest" ? f.guest.trim() : null,
@@ -677,8 +721,8 @@ html.rcopen body { overflow: hidden; }
       var res = await fetch("/api/entries", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(rec) });
       if (res.status === 401) { location.href = "/login"; return; }
       var data = await res.json().catch(function () { return {}; });
-      if (!(res.ok && data.ok)) { ED.saving = false; ED.err = data.error || "The change could not be saved."; renderDiary(true); return; }
-    } catch (e) { ED.saving = false; ED.err = "Could not reach the server. Check your connection."; renderDiary(true); return; }
+      if (!(res.ok && data.ok)) { ED.saving = false; ED.err = data.error || "The change could not be saved."; renderDiary(true); showEditErr(); return; }
+    } catch (e) { ED.saving = false; ED.err = "Could not reach the server. Check your connection."; renderDiary(true); showEditErr(); return; }
     ED = null; await load(); fillLists(); renderDiary(true);
   }
   async function deleteEntry(id) {
@@ -720,6 +764,7 @@ html.rcopen body { overflow: hidden; }
   });
   dRoot.addEventListener("input", function (ev) {
     var k = ev.target.getAttribute("data-e"); if (k && ED) ED.f[k] = ev.target.value;
+    var fld = ev.target.closest && ev.target.closest(".field"); if (fld) fld.classList.remove("miss");
     if (ev.target.getAttribute("data-tp") && TP) TP.val = ev.target.value;
   });
 

@@ -13,13 +13,26 @@ const E = [
   { item: "Naan", restaurant: "a", food_rating: 4, occurred_at: d("13"), delivery_app: "doordash", delivery_rating: 2 },
   { item: "Pad thai", restaurant: "D", food_rating: 2, occurred_at: d("14"), delivery_rating: 5 },
 ];
-const f = Q.favourite(E, "RAMEN");
-assert.equal(f.matches, 2); assert.equal(f.max, 5); assert.deepEqual(f.ties.map((e) => e.restaurant), ["B", "A"]);
 const r = Q.restaurant(E, "a"); assert.equal(r.count, 3); assert.equal(r.avg, "4.00");
 assert.deepEqual(Q.top(E, 3).map((e) => e.item), ["Tonkotsu ramen", "ramen ", "Ramen"]);
 assert.equal(Q.top(E, 5, "japanese").length, 2);
 const g = Q.delivery(E, ""); assert.equal(g.length, 2); assert.equal(g[1].label, "DoorDash"); assert.equal(g[1].avg, "3.00"); assert.equal(g[1].n, 2);
-assert.equal(Q.favourite([], "x").matches, 0);
+assert.deepEqual(Q.versions([], "x"), []);
+// Best version of a dish type: one row per restaurant and dish name, ranked by average, then tries, then recency.
+const S = [
+  { item: "The Stallion", dish_type: "Italian sub", restaurant: "Sub Shop", food_rating: 5, occurred_at: d("01") },
+  { item: "the stallion", dish_type: "italian sub", restaurant: "sub shop", food_rating: 4, occurred_at: d("09") },
+  { item: "Italian Special", dish_type: "Italian sub", restaurant: "Deli Two", food_rating: 4, occurred_at: d("05") },
+  { item: "Italian Special", dish_type: "Italian sub", restaurant: "Deli Two", food_rating: 5, occurred_at: d("06") },
+  { item: "Meatball Sub", dish_type: "Meatball sub", restaurant: "Deli Two", food_rating: 5, occurred_at: d("07") },
+  { item: "Italian sub", restaurant: "Old Place", food_rating: 2, occurred_at: d("02") }, // older entry: matches by dish name
+];
+const v = Q.versions(S, "ITALIAN SUB");
+assert.equal(v.length, 3);
+assert.deepEqual(v.map((x) => x.item), ["The Stallion", "Italian Special", "Italian sub"]); // both 4.50 with 2 tries: the more recent one ranks first
+assert.deepEqual(v.map((x) => x.avg), ["4.50", "4.50", "2.00"]);
+assert.equal(v[0].n, 2); assert.equal(v[2].restaurant, "Old Place");
+assert.equal(Q.versions(S, "meatball sub").length, 1);
 // Two dishes from one order share a visit_id, so the delivery rating counts once.
 const V = [
   { entry_id: "a1", visit_id: "v1", food_rating: 5, delivery_app: "DoorDash", delivery_rating: 4, occurred_at: d("15") },

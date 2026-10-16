@@ -127,7 +127,7 @@ html.kb body { padding-bottom: 60vh; }
   </nav>
 
   <div id="status" class="banner" hidden></div>
-  <datalist id="dl-rest"></datalist><datalist id="dl-item"></datalist><datalist id="dl-cuisine"></datalist><datalist id="dl-app"></datalist>
+  <datalist id="dl-rest"></datalist><datalist id="dl-item"></datalist><datalist id="dl-cuisine"></datalist><datalist id="dl-app"></datalist><datalist id="dl-type"></datalist><datalist id="dl-dishq"></datalist>
 
   <section class="panel" id="p-log" role="tabpanel" aria-labelledby="t-log">
     <div id="logRoot" class="flow"></div>
@@ -135,8 +135,8 @@ html.kb body { padding-bottom: 60vh; }
 
   <section class="panel" id="p-ask" role="tabpanel" aria-labelledby="t-ask" hidden>
     <div class="ask">
-      <h2>Favourite version of a dish</h2>
-      <form id="qFav"><div class="field"><label for="favIn">Dish <span class="hint">exact name, any capitalization</span></label><input type="text" id="favIn" list="dl-item" autocomplete="off" placeholder="Ramen"></div><button class="btn" type="submit">Find</button></form>
+      <h2>Best version of a dish</h2>
+      <form id="qFav"><div class="field"><label for="favIn">Dish type <span class="hint">such as Italian sub or ramen</span></label><input type="text" id="favIn" list="dl-dishq" autocomplete="off" placeholder="Italian sub"></div><button class="btn" type="submit">Find</button></form>
       <div class="result" id="favOut" aria-live="polite"></div>
     </div>
     <div class="ask">
@@ -197,12 +197,18 @@ html.kb body { padding-bottom: 60vh; }
 
   /* ---------- query logic (spec section 7) ---------- */
   var Q = {
-    favourite: function (entries, item) {
-      var k = norm(item), m = entries.filter(function (e) { return norm(e.item) === k && Number.isInteger(e.food_rating); });
-      if (!m.length) return { matches: 0, ties: [] };
-      var max = Math.max.apply(null, m.map(function (e) { return e.food_rating; }));
-      var ties = m.filter(function (e) { return e.food_rating === max; }).sort(function (a, b) { return ts(b) - ts(a); });
-      return { matches: m.length, max: max, ties: ties };
+    versions: function (entries, q) { // every version of a dish type, ranked: one row per restaurant and dish name
+      var k = norm(q), g = {};
+      entries.forEach(function (e) {
+        if (!Number.isInteger(e.food_rating)) return;
+        if (norm(e.dish_type) !== k && norm(e.item) !== k) return; // match the type, or the dish name for older entries
+        var key = norm(e.restaurant) + "|" + norm(e.item);
+        var o = g[key] || (g[key] = { restaurant: e.restaurant, item: e.item, type: e.dish_type || "", sum: 0, n: 0, last: -1, lastEntry: null });
+        o.sum += e.food_rating; o.n++;
+        if (ts(e) >= o.last) { o.last = ts(e); o.lastEntry = e; }
+      });
+      return Object.keys(g).map(function (x) { var o = g[x]; o.avgNum = o.sum / o.n; o.avg = o.avgNum.toFixed(2); return o; })
+        .sort(function (a, b) { return b.avgNum - a.avgNum || b.n - a.n || b.last - a.last; });
     },
     restaurant: function (entries, name) {
       var k = norm(name), m = entries.filter(function (e) { return norm(e.restaurant) === k && Number.isInteger(e.food_rating); });
@@ -239,7 +245,7 @@ html.kb body { padding-bottom: 60vh; }
   function entryCard(e, extra) {
     var who = raterText(e);
     var out = '<div class="entry"><div class="top"><b>' + h(e.item) + "</b>" + pips(e.food_rating, "food") + "</div>" +
-      '<div class="meta">' + h(e.restaurant) + " · " + h(e.cuisine_type || "Unknown") + " · " + (e.service_type === "delivery" ? "Delivery" : "Dine-in") + " · " + fmtDate(e.occurred_at) + (who ? " · Rated by " + h(who) : "") + (e.updated_at ? " · edited" : "") + "</div>";
+      '<div class="meta">' + (e.dish_type ? h(e.dish_type) + " · " : "") + h(e.restaurant) + " · " + h(e.cuisine_type || "Unknown") + " · " + (e.service_type === "delivery" ? "Delivery" : "Dine-in") + " · " + fmtDate(e.occurred_at) + (who ? " · Rated by " + h(who) : "") + (e.updated_at ? " · edited" : "") + "</div>";
     if (e.food_comment) out += '<p class="cmt">' + h(e.food_comment) + "</p>";
     if (e.service_type === "delivery" && Number.isInteger(e.delivery_rating)) {
       out += '<div class="meta"><span class="badge deliv">Delivery</span> ' + h(e.delivery_app || "App not recorded") + " " + pips(e.delivery_rating, "deliv") + (e.delivery_comment ? " · " + h(e.delivery_comment) : "") + "</div>";
@@ -252,12 +258,38 @@ html.kb body { padding-bottom: 60vh; }
   var ED = null;  // the entry being edited: { id, f, n, legacy, visit, err, saving }
   var DL = null;  // id of an entry waiting for delete confirmation
   var DLERR = "";
+  var TP = null;  // adding a type to an older dish: { id, adding, val, err }
   function renderDiary(force) {
-    if (ED && !force) return; // do not wipe an edit in progress when the list refreshes
+    if ((ED || (TP && TP.adding)) && !force) return; // do not wipe an edit in progress when the list refreshes
     var list = state.entries.slice().sort(function (a, b) { return ts(b) - ts(a); });
-    $("diary").innerHTML = list.length ? '<div class="ask">' + list.map(function (e) {
+    $("diary").innerHTML = typePanel(list) + (list.length ? '<div class="ask">' + list.map(function (e) {
       return ED && ED.id === e.entry_id ? editForm(e) : entryCard(e, rowActions(e));
-    }).join("") + "</div>" : emptyMsg("No meals logged yet. Use the Log tab to add your first one.");
+    }).join("") + "</div>" : emptyMsg("No meals logged yet. Use the Log tab to add your first one."));
+  }
+  function typePanel(list) {
+    var un = list.filter(function (e) { return !e.dish_type; });
+    if (!un.length) return "";
+    var s = '<div class="ask" style="margin-bottom:18px"><h2>Add a type to older dishes</h2><p class="meta" style="margin:0">' + un.length + (un.length === 1 ? " dish was" : " dishes were") +
+      " logged before dish types existed. Tap a type to add it. Until then they still match by their dish name.</p>";
+    un.forEach(function (e) {
+      var id = h(e.entry_id), adding = TP && TP.adding && TP.id === e.entry_id;
+      s += '<div class="entry"><div class="top"><b>' + h(e.item) + '</b></div><div class="meta">' + h(e.restaurant) + " · " + h(e.cuisine_type) + '</div><div class="chips">' +
+        typesFor(e.cuisine_type).map(function (t) { return '<button type="button" class="chip" data-act="tpPick" data-id="' + id + '" data-v="' + h(t.name) + '">' + h(t.name) + "</button>"; }).join("") +
+        '<button type="button" class="chip" data-act="tpNew" data-id="' + id + '" aria-pressed="' + (adding ? "true" : "false") + '">+ New type</button></div>';
+      if (adding) s += '<div class="row"><input type="text" id="tp-input" data-tp="1" list="dl-type" value="' + h(TP.val) + '" placeholder="e.g. Italian sub" autocomplete="off" aria-label="Dish type" style="flex:1 1 180px;font:inherit;padding:11px 12px;min-height:46px;border:1px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)">' +
+        '<button type="button" class="btn" data-act="tpSave" data-id="' + id + '">Save type</button></div>' + (TP.err ? '<p class="err">' + h(TP.err) + "</p>" : "");
+      s += "</div>";
+    });
+    return s + "</div>";
+  }
+  async function setType(id, type) {
+    try {
+      var res = await fetch("/api/entries", { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify({ entry_id: id, dish_type: type }) });
+      if (res.status === 401) { location.href = "/login"; return; }
+      var data = await res.json().catch(function () { return {}; });
+      if (!(res.ok && data.ok)) { TP = { id: id, adding: true, val: type, err: data.error || "The type could not be saved." }; renderDiary(true); return; }
+    } catch (e) { TP = { id: id, adding: true, val: type, err: "Could not reach the server. Check your connection." }; renderDiary(true); return; }
+    TP = null; await load(); fillLists(); renderDiary(true);
   }
   function rowActions(e) {
     if (DL === e.entry_id) {
@@ -271,6 +303,8 @@ html.kb body { padding-bottom: 60vh; }
     function opts(arr) { return arr.map(function (v) { return '<option value="' + h(v) + '">'; }).join(""); }
     $("dl-rest").innerHTML = opts(uniq("restaurant"));
     $("dl-item").innerHTML = opts(uniq("item"));
+    $("dl-type").innerHTML = opts(uniq("dish_type"));
+    $("dl-dishq").innerHTML = opts(uniq("dish_type").concat(uniq("item")));
     $("dl-cuisine").innerHTML = opts(uniq("cuisine_type", CUISINES));
     $("dl-app").innerHTML = opts(uniq("delivery_app", ["DoorDash", "Uber Eats", "Grubhub"]));
   }
@@ -291,10 +325,38 @@ html.kb body { padding-bottom: 60vh; }
 
   /* ---------- Log tab: a visit is setup -> one card per dish -> review ---------- */
   var L = null;
-  function newDish(prevRater) { return { id: uid(), rater: prevRater || null, guest: "", item: "", rating: 0, comment: "", none: false, saved: false }; }
+  var BASE_APPS = ["DoorDash", "Uber Eats", "Instacart (Uber Eats)", "Grubhub"];
+  function appList() {
+    var seen = {}, out = [];
+    function add(a) { a = (a || "").trim(); if (a && !seen[norm(a)]) { seen[norm(a)] = 1; out.push(a); } }
+    BASE_APPS.forEach(add); state.entries.forEach(function (e) { add(e.delivery_app); });
+    return out;
+  }
+  function appChooser(cur, isOther, actPick, actOther, attr, id) {
+    var s = '<div class="chips">' + appList().map(function (a) { return chip(actPick, a, a, !isOther && norm(cur) === norm(a)); }).join("") + chip(actOther, "", "Other…", isOther) + "</div>";
+    if (isOther) s += '<input type="text" id="' + id + '" ' + attr + ' value="' + h(cur) + '" placeholder="Delivery app name" autocomplete="off" aria-label="Other delivery app">';
+    return s;
+  }
+  function typesFor(cuisine) {
+    var k = norm(cuisine), m = {};
+    state.entries.forEach(function (e) {
+      var t = (e.dish_type || "").trim(); if (!t || norm(e.cuisine_type) !== k) return;
+      var n = norm(t); if (!m[n]) m[n] = { name: t, count: 0 }; m[n].count++;
+    });
+    return Object.keys(m).map(function (x) { return m[x]; }).sort(function (a, b) { return b.count - a.count || (a.name < b.name ? -1 : 1); });
+  }
+  function typeChooser(cuisine, cur, isNew, actPick, actNew, attr, id) {
+    var list = typesFor(cuisine), adding = isNew || !list.length;
+    var s = '<div class="field"><span class="lbl">Type of dish <span class="hint">what it is, such as Italian sub</span></span><div class="chips">' +
+      list.map(function (t) { return chip(actPick, t.name, t.name, !adding && norm(cur) === norm(t.name), "<small>" + t.count + "</small>"); }).join("") +
+      chip(actNew, "", "+ New type", adding) + "</div>";
+    if (adding) s += '<input type="text" id="' + id + '" ' + attr + ' list="dl-type" value="' + h(cur) + '" placeholder="e.g. Italian sub" autocomplete="off" aria-label="New dish type">';
+    return s + "</div>";
+  }
+  function newDish(prevRater) { return { id: uid(), rater: prevRater || null, guest: "", type: "", typeNew: false, item: "", rating: 0, comment: "", none: false, saved: false }; }
   function resetLog() {
     L = { phase: "setup", cuisine: "", cuisineOther: false, restaurant: "", addingNew: false, service: "delivery", delivLog: null,
-      app: "", drate: 0, dcomment: "", dnone: false, when: nyLocalNow(), visit: uid(), dishes: [newDish()], cur: 0,
+      app: "", appOther: false, drate: 0, dcomment: "", dnone: false, when: nyLocalNow(), visit: uid(), dishes: [newDish()], cur: 0,
       err: "", pending: null, saving: false, savedRecs: [] };
   }
   function chip(act, v, label, on, extra) {
@@ -343,7 +405,7 @@ html.kb body { padding-bottom: 60vh; }
         s += '<div class="field"><span class="lbl">Log delivery details too?</span><div class="chips">' +
           chip("delivLog", "yes", "Yes", L.delivLog === "yes") + chip("delivLog", "no", "No, food only", L.delivLog === "no") + "</div></div>";
         if (L.delivLog === "yes") {
-          s += '<div class="deliv-box"><div class="field"><label for="f-app">Delivery app</label><input type="text" id="f-app" data-f="app" list="dl-app" value="' + h(L.app) + '" placeholder="DoorDash, Uber Eats, Grubhub" autocomplete="off"></div>' +
+          s += '<div class="deliv-box"><div class="field"><span class="lbl">Delivery app</span>' + appChooser(L.app, L.appOther, "app", "appOther", 'data-f="app"', "f-app") + "</div>" +
             '<div class="field"><span class="lbl">Delivery rating <span class="hint">1 to 5, about the delivery service only</span></span>' + rateBtns("drate", L.drate, "deliv") + "</div>" +
             '<div class="field"><label for="f-dcomment">Delivery comment</label><textarea id="f-dcomment" data-f="dcomment"' + (L.dnone ? " disabled" : "") + ' placeholder="On time? Packaging? Driver?">' + h(L.dcomment) + '</textarea>' +
             '<label class="check"><input type="checkbox" id="f-dnone" data-f="dnone"' + (L.dnone ? " checked" : "") + "> No comment</label></div></div>";
@@ -365,7 +427,8 @@ html.kb body { padding-bottom: 60vh; }
     s += '<div class="field"><span class="lbl">Who is rating?</span><div class="chips">' + RATERS.map(function (r) { return chip("rater", r, r, d.rater === r); }).join("") + "</div>";
     if (d.rater === "Guest") s += '<input type="text" id="d-guest" data-d="guest" value="' + h(d.guest) + '" placeholder="Guest\'s name (optional)" autocomplete="off" aria-label="Guest name">';
     s += "</div>";
-    s += '<div class="field"><label for="d-item">Dish</label><input type="text" id="d-item" data-d="item" list="dl-item" value="' + h(d.item) + '" placeholder="e.g. Chicken tikka masala" autocomplete="off"></div>';
+    s += typeChooser(L.cuisine, d.type, d.typeNew, "typePick", "typeNew", 'data-d="type"', "d-type");
+    s += '<div class="field"><label for="d-item">Dish name <span class="hint">as the menu calls it</span></label><input type="text" id="d-item" data-d="item" list="dl-item" value="' + h(d.item) + '" placeholder="e.g. The Stallion" autocomplete="off"></div>';
     s += '<div class="field"><span class="lbl">Food rating <span class="hint">1 to 5, about the food only</span></span>' + rateBtns("rating", d.rating, "food") + "</div>";
     s += '<div class="field"><label for="d-comment">Food comment</label><textarea id="d-comment" data-d="comment"' + (d.none ? " disabled" : "") + ' placeholder="What stood out?">' + h(d.comment) + '</textarea>' +
       '<label class="check"><input type="checkbox" id="d-none" data-d="none"' + (d.none ? " checked" : "") + "> No comment</label></div>";
@@ -385,7 +448,7 @@ html.kb body { padding-bottom: 60vh; }
     }
     L.dishes.forEach(function (d, i) {
       var who = d.rater === "Guest" ? "Guest" + (d.guest.trim() ? " (" + d.guest.trim() + ")" : "") : d.rater;
-      s += '<div class="entry"><div class="top"><b>' + h(d.item) + "</b>" + pips(d.rating, "food") + '</div><div class="meta">Rated by ' + h(who) + "</div>" +
+      s += '<div class="entry"><div class="top"><b>' + h(d.item) + "</b>" + pips(d.rating, "food") + '</div><div class="meta">' + h(d.type) + " · Rated by " + h(who) + "</div>" +
         (d.comment ? '<p class="cmt">' + h(d.comment) + "</p>" : "") +
         '<div class="row"><button type="button" class="link" data-act="editDish" data-i="' + i + '">Edit</button>' +
         (L.dishes.length > 1 ? '<button type="button" class="link" data-act="removeDish" data-i="' + i + '">Remove</button>' : "") + "</div></div>";
@@ -429,7 +492,8 @@ html.kb body { padding-bottom: 60vh; }
   }
   function checkDish(d) {
     if (!d.rater) return "Choose who is rating.";
-    if (!d.item.trim()) return "Enter the dish.";
+    if (!d.type.trim()) return "Pick the type of dish, or add a new one.";
+    if (!d.item.trim()) return "Enter the dish name.";
     if (!(d.rating >= 1 && d.rating <= 5)) return "Pick a food rating from 1 to 5.";
     if (!d.comment.trim() && !d.none) return "Add a food comment, or tick No comment.";
     return "";
@@ -438,7 +502,7 @@ html.kb body { padding-bottom: 60vh; }
     var r = {
       entry_id: d.id, visit_id: L.visit, occurred_at: nyISO(L.when), created_by: null,
       rated_by: d.rater, rater_name: d.rater === "Guest" ? d.guest.trim() : null,
-      restaurant: L.restaurant.trim(), service_type: L.service, item: d.item.trim(), cuisine_type: L.cuisine.trim(),
+      restaurant: L.restaurant.trim(), service_type: L.service, item: d.item.trim(), dish_type: d.type.trim(), cuisine_type: L.cuisine.trim(),
       food_rating: d.rating, food_comment: d.comment.trim(),
       delivery_app: null, delivery_rating: null, delivery_comment: null
     };
@@ -479,6 +543,10 @@ html.kb body { padding-bottom: 60vh; }
     service: function (v) { L.service = v; L.err = ""; renderLog(); },
     delivLog: function (v) { L.delivLog = v; L.err = ""; renderLog(); },
     drate: function (v) { L.drate = +v; renderLog(); },
+    app: function (v) { L.app = v; L.appOther = false; L.err = ""; renderLog(); },
+    appOther: function () { L.appOther = true; L.app = ""; L.err = ""; renderLog(); var i = $("f-app"); if (i) i.focus(); },
+    typePick: function (v) { var d = L.dishes[L.cur]; d.type = v; d.typeNew = false; L.err = ""; renderLog(); },
+    typeNew: function () { var d = L.dishes[L.cur]; d.type = ""; d.typeNew = true; L.err = ""; renderLog(); var i = $("d-type"); if (i) i.focus(); },
     toDishes: function () { var e = checkSetup(); if (e) return setErr(e); L.cur = 0; go("dish"); },
     rater: function (v) { L.dishes[L.cur].rater = v; renderLog(); },
     rating: function (v) { L.dishes[L.cur].rating = +v; renderLog(); },
@@ -514,8 +582,8 @@ html.kb body { padding-bottom: 60vh; }
   function startEdit(e) {
     var n = e.visit_id ? state.entries.filter(function (x) { return x.visit_id === e.visit_id; }).length : 1;
     var isD = e.service_type === "delivery";
-    return { id: e.entry_id, n: n, legacy: !e.rated_by, visit: e.visit_id || e.entry_id, err: "", saving: false, f: {
-      rater: e.rated_by || null, guest: e.rater_name || "", item: e.item || "", rating: e.food_rating || 0, comment: e.food_comment || "",
+    return { id: e.entry_id, n: n, legacy: !e.rated_by, legacyType: !e.dish_type, visit: e.visit_id || e.entry_id, err: "", saving: false, f: {
+      rater: e.rated_by || null, guest: e.rater_name || "", type: e.dish_type || "", typeNew: false, appOther: false, item: e.item || "", rating: e.food_rating || 0, comment: e.food_comment || "",
       cuisine: e.cuisine_type || "", restaurant: e.restaurant || "", service: e.service_type || "delivery",
       delivLog: isD ? (Number.isInteger(e.delivery_rating) ? "yes" : "no") : null,
       app: e.delivery_app || "", drate: e.delivery_rating || 0, dcomment: e.delivery_comment || "",
@@ -529,7 +597,8 @@ html.kb body { padding-bottom: 60vh; }
       RATERS.map(function (r) { return chip("eRater", r, r, f.rater === r); }).join("") + "</div>";
     if (f.rater === "Guest") s += '<input type="text" data-e="guest" value="' + h(f.guest) + '" placeholder="Guest\'s name (optional)" autocomplete="off" aria-label="Guest name">';
     s += "</div>";
-    s += '<div class="field"><label for="e-item">Dish</label><input type="text" id="e-item" data-e="item" list="dl-item" value="' + h(f.item) + '" autocomplete="off"></div>';
+    s += typeChooser(f.cuisine, f.type, f.typeNew, "eTypePick", "eTypeNew", 'data-e="type"', "e-type");
+    s += '<div class="field"><label for="e-item">Dish name <span class="hint">as the menu calls it</span></label><input type="text" id="e-item" data-e="item" list="dl-item" value="' + h(f.item) + '" autocomplete="off"></div>';
     s += '<div class="field"><span class="lbl">Food rating</span>' + rateBtns("eRating", f.rating, "food") + "</div>";
     s += '<div class="field"><label for="e-comment">Food comment</label><textarea id="e-comment" data-e="comment">' + h(f.comment) + "</textarea></div>";
     s += '<h3 class="grp">Visit details' + (n > 1 ? ' <span class="hint">apply to all ' + n + " dishes from this visit</span>" : "") + "</h3>";
@@ -539,7 +608,7 @@ html.kb body { padding-bottom: 60vh; }
     if (f.service === "delivery") {
       s += '<div class="field"><span class="lbl">Delivery details logged?</span><div class="chips">' + chip("eDelivLog", "yes", "Yes", f.delivLog === "yes") + chip("eDelivLog", "no", "No", f.delivLog !== "yes") + "</div></div>";
       if (f.delivLog === "yes") {
-        s += '<div class="deliv-box"><div class="field"><label for="e-app">Delivery app</label><input type="text" id="e-app" data-e="app" list="dl-app" value="' + h(f.app) + '" autocomplete="off"></div>' +
+        s += '<div class="deliv-box"><div class="field"><span class="lbl">Delivery app</span>' + appChooser(f.app, f.appOther, "eApp", "eAppOther", 'data-e="app"', "e-app") + "</div>" +
           '<div class="field"><span class="lbl">Delivery rating</span>' + rateBtns("eDrate", f.drate, "deliv") + "</div>" +
           '<div class="field"><label for="e-dcomment">Delivery comment</label><textarea id="e-dcomment" data-e="dcomment">' + h(f.dcomment) + "</textarea></div></div>";
       }
@@ -552,7 +621,8 @@ html.kb body { padding-bottom: 60vh; }
   }
   function checkEdit() {
     var f = ED.f;
-    if (!f.item.trim()) return "Enter the dish.";
+    if (!f.type.trim() && !ED.legacyType) return "Pick the type of dish, or add a new one.";
+    if (!f.item.trim()) return "Enter the dish name.";
     if (!(f.rating >= 1 && f.rating <= 5)) return "Pick a food rating from 1 to 5.";
     if (!f.rater && !ED.legacy) return "Choose who rated.";
     if (!f.cuisine.trim()) return "Enter a cuisine.";
@@ -570,7 +640,7 @@ html.kb body { padding-bottom: 60vh; }
     var f = ED.f, withDel = f.service === "delivery" && f.delivLog === "yes";
     var rec = {
       entry_id: ED.id, visit_id: ED.visit, occurred_at: nyISO(f.when), rated_by: f.rater, rater_name: f.rater === "Guest" ? f.guest.trim() : null,
-      restaurant: f.restaurant.trim(), service_type: f.service, item: f.item.trim(), cuisine_type: f.cuisine.trim(),
+      restaurant: f.restaurant.trim(), service_type: f.service, item: f.item.trim(), dish_type: f.type.trim(), cuisine_type: f.cuisine.trim(),
       food_rating: f.rating, food_comment: f.comment.trim(),
       delivery_app: withDel ? f.app.trim() : null, delivery_rating: withDel ? f.drate : null, delivery_comment: withDel ? f.dcomment.trim() : null
     };
@@ -604,6 +674,13 @@ html.kb body { padding-bottom: 60vh; }
     eRating: function (v) { ED.f.rating = +v; ED.err = ""; renderDiary(true); },
     eService: function (v) { ED.f.service = v; if (v === "delivery" && !ED.f.delivLog) ED.f.delivLog = "no"; ED.err = ""; renderDiary(true); },
     eDelivLog: function (v) { ED.f.delivLog = v; ED.err = ""; renderDiary(true); },
+    eTypePick: function (v) { ED.f.type = v; ED.f.typeNew = false; ED.err = ""; renderDiary(true); },
+    eTypeNew: function () { ED.f.type = ""; ED.f.typeNew = true; ED.err = ""; renderDiary(true); var i = $("e-type"); if (i) i.focus(); },
+    eApp: function (v) { ED.f.app = v; ED.f.appOther = false; ED.err = ""; renderDiary(true); },
+    eAppOther: function () { ED.f.appOther = true; ED.f.app = ""; ED.err = ""; renderDiary(true); var i = $("e-app"); if (i) i.focus(); },
+    tpPick: function (v, el) { setType(el.getAttribute("data-id"), v); },
+    tpNew: function (v, el) { TP = { id: el.getAttribute("data-id"), adding: true, val: "", err: "" }; renderDiary(true); var i = $("tp-input"); if (i) i.focus(); },
+    tpSave: function (v, el) { var t = TP && TP.val.trim(); if (!t) { if (TP) TP.err = "Enter a type."; renderDiary(true); return; } setType(el.getAttribute("data-id"), t); },
     eDrate: function (v) { ED.f.drate = +v; ED.err = ""; renderDiary(true); },
     eCancel: function () { ED = null; renderDiary(true); },
     eSave: function () { saveEdit(); }
@@ -615,6 +692,7 @@ html.kb body { padding-bottom: 60vh; }
   });
   dRoot.addEventListener("input", function (ev) {
     var k = ev.target.getAttribute("data-e"); if (k && ED) ED.f[k] = ev.target.value;
+    if (ev.target.getAttribute("data-tp") && TP) TP.val = ev.target.value;
   });
 
   /* ---------- keyboard: keep the focused field visible ---------- */
@@ -635,11 +713,17 @@ html.kb body { padding-bottom: 60vh; }
   /* ---------- ask forms ---------- */
   function noData() { return emptyMsg("No matching records."); }
   $("qFav").addEventListener("submit", function (ev) {
-    ev.preventDefault(); var q = $("favIn").value.trim(), out = $("favOut"); if (!q) { out.innerHTML = emptyMsg("Enter a dish."); return; }
-    var r = Q.favourite(state.entries, q);
-    if (!r.matches) { out.innerHTML = noData(); return; }
-    var note = r.ties.length > 1 ? '<div class="meta">' + r.ties.length + " entries tie at " + r.max + " out of 5.</div>" : "";
-    out.innerHTML = '<div class="meta">' + r.matches + " logged · best food rating " + r.max + " out of 5</div>" + note + r.ties.map(entryHtml).join("");
+    ev.preventDefault(); var q = $("favIn").value.trim(), out = $("favOut"); if (!q) { out.innerHTML = emptyMsg("Enter a dish type."); return; }
+    var r = Q.versions(state.entries, q);
+    if (!r.length) { out.innerHTML = noData(); return; }
+    var places = {}; r.forEach(function (x) { places[norm(x.restaurant)] = 1; }); var np = Object.keys(places).length;
+    out.innerHTML = '<div class="meta">' + r.length + (r.length === 1 ? " version" : " versions") + " across " + np + (np === 1 ? " restaurant" : " restaurants") + ", best first. Averages are food ratings only.</div>" +
+      r.map(function (x, i) {
+        var le = x.lastEntry;
+        return '<div class="entry"><div class="top"><b>#' + (i + 1) + " " + h(x.item) + '</b><span class="big">' + x.avg + "</span></div>" +
+          '<div class="meta">' + h(x.restaurant) + (x.type ? " · " + h(x.type) : "") + " · " + x.n + (x.n === 1 ? " try" : " tries") + " · last " + fmtDate(le.occurred_at) + "</div>" +
+          (le.food_comment ? '<p class="cmt">' + h(le.food_comment) + "</p>" : "") + "</div>";
+      }).join("");
   });
   $("qRest").addEventListener("submit", function (ev) {
     ev.preventDefault(); var q = $("restIn").value.trim(), out = $("restOut"); if (!q) { out.innerHTML = emptyMsg("Enter a restaurant."); return; }

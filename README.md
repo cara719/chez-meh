@@ -6,6 +6,7 @@ A shared restaurant diary. Food and delivery are rated separately. Next.js on Ve
 - `TURSO_DATABASE_URL`: the database URL (starts with `libsql://`)
 - `TURSO_AUTH_TOKEN`: the database token
 - `APP_PASSPHRASE`: the shared passphrase. Sign-in lasts 30 days. Changing it signs everyone out.
+- `ANTHROPIC_API_KEY`: optional. Turns on the round icon at the bottom right, which reads a receipt photo or order screenshot and fills in the Log form. Without it everything else works and the button explains the key is missing. `RECEIPT_MODEL` overrides the model (default `claude-sonnet-5`).
 
 The `meals` table is created automatically on first use.
 

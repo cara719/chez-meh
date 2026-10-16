@@ -8,9 +8,10 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "test": "node scripts/test-logic.js"
+    "test": "node scripts/test-logic.js && node --no-warnings scripts/test-receipt.mjs"
   },
   "dependencies": {
+    "@anthropic-ai/sdk": "^0.109.1",
     "@libsql/client": "0.14.0",
     "next": "15.5.28",
     "react": "19.1.10",

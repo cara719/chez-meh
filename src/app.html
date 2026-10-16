@@ -37,7 +37,7 @@
 html { background: var(--bg); }
 body {
   margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.45;
-  padding-block: 0 56px;
+  padding-block: 0 96px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
 }
@@ -111,6 +111,16 @@ textarea:disabled { opacity: .5; }
 .copy { width: 100%; font: .8rem var(--font-mono); min-height: 140px; }
 .row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
 html.kb body { padding-bottom: 60vh; }
+#rcFab { position: fixed; right: max(16px, env(safe-area-inset-right, 0px)); bottom: max(16px, env(safe-area-inset-bottom, 0px)); z-index: 20; width: 56px; height: 56px; padding: 0; border: 0; border-radius: 50%; overflow: hidden; cursor: pointer; background: var(--ink); box-shadow: 0 4px 14px rgba(8, 32, 66, .35); }
+#rcFab img { width: 100%; height: 100%; display: block; object-fit: cover; }
+html.kb #rcFab, html.rcopen #rcFab { display: none; }
+html.rcopen body { overflow: hidden; }
+.sheet { position: fixed; inset: 0; z-index: 30; background: rgba(8, 20, 40, .55); display: flex; align-items: flex-end; justify-content: center; }
+.sheet .pane { width: 100%; max-width: 640px; max-height: 92vh; overflow: auto; background: var(--bg); border-radius: 16px 16px 0 0; padding: 20px max(16px, env(safe-area-inset-left, 0px)) calc(20px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 14px; align-content: start; }
+.sheet h2:focus { outline: none; }
+.rcimg { max-width: 100%; max-height: 180px; border-radius: 8px; border: 1px solid var(--line); justify-self: start; }
+.banner ul { margin: 6px 0 0; padding-left: 18px; }
+.flow > .banner { margin-top: 0; }
 .editbox { display: grid; gap: 16px; border: 2px solid var(--ink); border-radius: 10px; padding: 14px; background: var(--bg); }
 .grp { font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 4px 0 0; font-weight: 700; }
 .confirmdel { background: var(--food-soft); border-radius: 8px; padding: 10px 12px; display: grid; gap: 8px; }
@@ -166,6 +176,10 @@ html.kb body { padding-bottom: 60vh; }
     <div id="diary"></div>
   </section>
 </div>
+
+<button type="button" id="rcFab" aria-label="Add from a receipt or screenshot" title="Add from a receipt or screenshot"><img src="/icon-192.png" alt=""></button>
+<div class="sheet" id="rc" hidden><div class="pane" role="dialog" aria-modal="true" aria-labelledby="rcT" id="rcBody"></div></div>
+<input type="file" id="rcFile" accept="image/*" hidden>
 
 <script>
 (function () {
@@ -391,6 +405,11 @@ html.kb body { padding-bottom: 60vh; }
 
   function viewSetup() {
     var cl = cuisineList(), s = '<div class="flow"><h2>New visit</h2>';
+    if (L.fromReceipt) {
+      s += '<div class="banner"><b>Filled in from your receipt.</b> Check it over, then add the ratings and comments.' +
+        (L.hint && !L.restaurant.trim() ? "<br>Restaurant on the receipt: <b>" + h(L.hint) + "</b>" : "") +
+        (L.receiptNotes && L.receiptNotes.length ? "<ul>" + L.receiptNotes.map(function (n) { return "<li>" + h(n) + "</li>"; }).join("") + "</ul>" : "") + "</div>";
+    }
     s += '<div class="field"><span class="lbl">Cuisine</span><div class="chips">' +
       cl.map(function (c) { return chip("cuisine", c, c, !L.cuisineOther && norm(L.cuisine) === norm(c)); }).join("") +
       chip("cuisineOther", "", "Other…", L.cuisineOther) + "</div>";
@@ -539,8 +558,13 @@ html.kb body { padding-bottom: 60vh; }
     fillLists(); renderDiary(); renderLog();
   }
 
+  function reHint() { // after a receipt, keep its restaurant when the cuisine is picked by hand
+    if (!L.hint) return;
+    var m = restaurantsFor(L.cuisine).filter(function (r) { return norm(r.name) === norm(L.hint); })[0];
+    if (m) { L.restaurant = m.name; L.addingNew = false; } else if (L.cuisine.trim()) { L.restaurant = L.hint; L.addingNew = true; }
+  }
   var actions = {
-    cuisine: function (v) { L.cuisine = v; L.cuisineOther = false; L.restaurant = ""; L.addingNew = false; L.err = ""; renderLog(); },
+    cuisine: function (v) { L.cuisine = v; L.cuisineOther = false; L.restaurant = ""; L.addingNew = false; L.err = ""; reHint(); renderLog(); },
     cuisineOther: function () { L.cuisineOther = true; L.cuisine = ""; L.restaurant = ""; L.addingNew = false; L.err = ""; renderLog(); },
     rest: function (v) { L.restaurant = v; L.addingNew = false; L.err = ""; renderLog(); },
     restNew: function () { L.addingNew = true; L.restaurant = ""; L.err = ""; renderLog(); var i = $("f-restaurant"); if (i) i.focus(); },
@@ -698,6 +722,123 @@ html.kb body { padding-bottom: 60vh; }
     var k = ev.target.getAttribute("data-e"); if (k && ED) ED.f[k] = ev.target.value;
     if (ev.target.getAttribute("data-tp") && TP) TP.val = ev.target.value;
   });
+
+  /* ---------- receipt: read a photo or screenshot and prefill the Log form ---------- */
+  var RC = null; // { phase: pick | preparing | ready | reading | result, img, note, result, plan, err }
+  function rcOpen() { RC = { phase: "pick", img: null, note: "", result: null, plan: null, err: "" }; $("rc").hidden = false; document.documentElement.classList.add("rcopen"); renderRc(); var t = $("rcT"); if (t) t.focus(); }
+  function rcClose() { RC = null; $("rc").hidden = true; document.documentElement.classList.remove("rcopen"); try { $("rcFab").focus(); } catch (e) {} }
+  function shrinkImage(file) { // phone photos are huge; send a smaller JPEG so it fits the server's request limit
+    return new Promise(function (resolve, reject) {
+      var url = URL.createObjectURL(file), im = new Image();
+      im.onload = function () {
+        try {
+          var w = im.naturalWidth, hh = im.naturalHeight, sc = Math.min(1, 2000 / Math.max(w, hh)), q = 0.86, out = "", data = "";
+          for (var i = 0; i < 6; i++) {
+            var c = document.createElement("canvas"); c.width = Math.max(1, Math.round(w * sc)); c.height = Math.max(1, Math.round(hh * sc));
+            var cx = c.getContext("2d"); cx.fillStyle = "#fff"; cx.fillRect(0, 0, c.width, c.height); cx.drawImage(im, 0, 0, c.width, c.height);
+            out = c.toDataURL("image/jpeg", q); data = out.split(",")[1] || "";
+            if (data.length <= 3900000) break; sc *= 0.75; q = 0.8;
+          }
+          URL.revokeObjectURL(url);
+          if (!data || data.length > 4100000) return reject(new Error("big"));
+          resolve({ mediaType: "image/jpeg", data: data, url: out });
+        } catch (e) { URL.revokeObjectURL(url); reject(e); }
+      };
+      im.onerror = function () { URL.revokeObjectURL(url); reject(new Error("open")); };
+      im.src = url;
+    });
+  }
+  function dirtyLog() { return !!(L && (L.phase !== "setup" || L.cuisine || L.restaurant || L.dishes.some(function (d) { return d.item || d.rating || d.comment; }))); }
+  function planReceipt(r) { // turn what was read into Log-form values, preferring what the diary already has
+    var p = { cuisine: "", cuisineOther: false, restaurant: "", addingNew: false, service: r.service_type || "delivery", delivLog: null, app: "", appOther: false, when: null, dishes: [], hint: null, warn: [], known: false };
+    var known = null;
+    if (r.restaurant) state.entries.some(function (e) { if (norm(e.restaurant) === norm(r.restaurant)) { known = e; return true; } return false; });
+    var cname = known ? known.cuisine_type : r.cuisine;
+    if (cname) { var cm = cuisineList().filter(function (c) { return norm(c) === norm(cname); })[0]; if (cm) p.cuisine = cm; else { p.cuisine = cname; p.cuisineOther = true; } }
+    if (r.restaurant) { p.hint = r.restaurant; if (known) { p.restaurant = known.restaurant; p.known = true; } else if (p.cuisine) { p.restaurant = r.restaurant; p.addingNew = true; } }
+    else p.warn.push("I couldn't read the restaurant name.");
+    if (!p.cuisine) p.warn.push("Pick the cuisine to continue.");
+    if (p.service === "delivery" && r.delivery_app) {
+      var am = appList().filter(function (a) { return norm(a) === norm(r.delivery_app); })[0];
+      p.delivLog = "yes"; if (am) p.app = am; else { p.app = r.delivery_app; p.appOther = true; }
+    }
+    if (r.date) { p.when = r.date + "T" + (r.time || "19:00"); if (!r.time) p.warn.push("No time on it, so I used 7:00 PM."); } else p.warn.push("No date on it, so the time is set to now.");
+    var types = typesFor(p.cuisine);
+    r.dishes.forEach(function (d) {
+      var m = d.dish_type ? types.filter(function (t) { return norm(t.name) === norm(d.dish_type); })[0] : null;
+      p.dishes.push({ item: d.item, type: m ? m.name : (d.dish_type || ""), typeNew: !m && !!d.dish_type });
+    });
+    if (!p.dishes.length) p.warn.push("I couldn't find any dishes.");
+    if (r.notes) p.warn.push(r.notes);
+    return p;
+  }
+  function applyReceipt(p) {
+    resetLog();
+    L.cuisine = p.cuisine; L.cuisineOther = p.cuisineOther; L.restaurant = p.restaurant; L.addingNew = p.addingNew; L.service = p.service;
+    if (p.delivLog) { L.delivLog = p.delivLog; L.app = p.app; L.appOther = p.appOther; }
+    if (p.when) L.when = p.when;
+    if (p.dishes.length) L.dishes = p.dishes.map(function (d) { var x = newDish(); x.item = d.item; x.type = d.type; x.typeNew = d.typeNew; return x; });
+    L.hint = p.hint; L.fromReceipt = true; L.receiptNotes = p.warn;
+    rcClose(); $("t-log").click(); renderLog(); window.scrollTo(0, 0);
+  }
+  function renderRc() {
+    if (!RC) return;
+    var s = "", img = RC.img ? '<img class="rcimg" src="' + h(RC.img.url) + '" alt="The photo you chose">' : "";
+    var err = RC.err ? '<p class="err" role="alert">' + h(RC.err) + "</p>" : "";
+    if (RC.phase === "pick" || RC.phase === "preparing") {
+      s = '<h2 id="rcT" tabindex="-1">Add from a receipt or screenshot</h2>' +
+        '<p class="meta">Take a photo of a receipt, or pick a screenshot of an order from DoorDash, Uber Eats and the like. I\'ll fill in what I can read. The ratings and comments are yours to add. The picture is not saved.</p>' + err +
+        '<button class="btn" type="button" data-rc="choose"' + (RC.phase === "preparing" ? " disabled" : "") + ">" + (RC.phase === "preparing" ? "Getting the picture ready…" : "Choose a photo or screenshot") + "</button>" +
+        '<button class="link" type="button" data-rc="close">Cancel</button>';
+    } else if (RC.phase === "ready") {
+      s = '<h2 id="rcT" tabindex="-1">Ready to read</h2>' + img +
+        '<div class="field"><label for="rc-note">Anything I should know? <span class="hint">optional</span></label><input type="text" id="rc-note" data-rcin="note" value="' + h(RC.note) + '" placeholder="e.g. we ordered for two" autocomplete="off"></div>' + err +
+        '<div class="actions"><button class="btn alt" type="button" data-rc="choose">Different photo</button><button class="btn" type="button" data-rc="read">Read it</button></div>' +
+        '<button class="link" type="button" data-rc="close">Cancel</button>';
+    } else if (RC.phase === "reading") {
+      s = '<h2 id="rcT" tabindex="-1">Reading…</h2>' + img + '<p class="meta" role="status">This takes a few seconds.</p>';
+    } else {
+      var p = RC.plan, r = RC.result;
+      var meta = [p.cuisine, p.service === "delivery" ? (p.app ? "Delivery via " + p.app : "Delivery") : "Dine-in", p.when ? fmtDate(nyISO(p.when)) : ""].filter(Boolean).map(h).join(" · ");
+      s = '<h2 id="rcT" tabindex="-1">Here\'s what I read</h2><div class="confirm"><div><b>' + (r.restaurant ? h(p.known ? p.restaurant : r.restaurant) : "Restaurant not found") + "</b>" +
+        (p.known ? ' <span class="hint">already in your diary</span>' : "") + '<div class="meta">' + meta + "</div></div>" +
+        (p.dishes.length ? p.dishes.map(function (d) { return '<div class="entry"><b>' + h(d.item) + '</b><div class="meta">' + (d.type ? h(d.type) + (d.typeNew ? " · new type" : "") : "Type not guessed") + "</div></div>"; }).join("") : "") + "</div>" +
+        (p.warn.length ? '<ul class="meta">' + p.warn.map(function (n) { return "<li>" + h(n) + "</li>"; }).join("") + "</ul>" : "") +
+        (dirtyLog() ? '<p class="meta"><b>This replaces the visit you are logging now.</b></p>' : "") +
+        '<div class="actions"><button class="btn alt" type="button" data-rc="choose">Try another photo</button><button class="btn" type="button" data-rc="fill">Fill in the form</button></div>' +
+        '<button class="link" type="button" data-rc="close">Cancel</button>';
+    }
+    $("rcBody").innerHTML = s;
+  }
+  async function rcFile(file) {
+    if (!file || !RC) return;
+    if (!/^image\//.test(file.type)) { RC.err = "That isn't a picture. Choose a photo or a screenshot."; RC.phase = RC.img ? "ready" : "pick"; renderRc(); return; }
+    var me = RC; me.phase = "preparing"; me.err = ""; renderRc();
+    try { me.img = await shrinkImage(file); me.phase = "ready"; }
+    catch (e) { me.err = e && e.message === "big" ? "That picture is too large. Try a screenshot instead." : "I couldn't open that picture. Try a screenshot or a JPEG or PNG photo."; me.phase = me.img ? "ready" : "pick"; }
+    if (RC === me) renderRc();
+  }
+  async function rcRead() {
+    var me = RC; if (!me || !me.img) return;
+    me.phase = "reading"; me.err = ""; renderRc();
+    try {
+      var res = await fetch("/api/receipt", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ image: { mediaType: me.img.mediaType, data: me.img.data }, note: me.note.trim() }) });
+      if (res.status === 401) { location.href = "/login"; return; }
+      var data = await res.json().catch(function () { return {}; });
+      if (!res.ok || !data.ok) { me.phase = "ready"; me.err = data.error || "I couldn't read that image."; }
+      else { me.result = data.result; me.plan = planReceipt(data.result); me.phase = "result"; }
+    } catch (e) { me.phase = "ready"; me.err = "Could not reach the server. Check your connection."; }
+    if (RC === me) renderRc();
+  }
+  $("rcFab").addEventListener("click", rcOpen);
+  $("rcFile").addEventListener("change", function (ev) { var f = ev.target.files && ev.target.files[0]; ev.target.value = ""; rcFile(f); });
+  $("rc").addEventListener("click", function (ev) {
+    if (ev.target === $("rc")) return rcClose();
+    var el = ev.target.closest("[data-rc]"); if (!el || el.disabled) return; var a = el.getAttribute("data-rc");
+    if (a === "choose") $("rcFile").click(); else if (a === "close") rcClose(); else if (a === "read") rcRead(); else if (a === "fill" && RC && RC.plan) applyReceipt(RC.plan);
+  });
+  $("rc").addEventListener("input", function (ev) { if (RC && ev.target.getAttribute("data-rcin") === "note") RC.note = ev.target.value; });
+  document.addEventListener("keydown", function (ev) { if (ev.key === "Escape" && RC) rcClose(); });
 
   /* ---------- keyboard: keep the focused field visible ---------- */
   function isTextField(t) { return t && /^(INPUT|TEXTAREA)$/.test(t.tagName) && t.type !== "checkbox" && t.type !== "radio"; }

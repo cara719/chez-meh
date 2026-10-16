@@ -1,7 +1,7 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover,interactive-widget=resizes-content">
 <title>Chez Meh</title>
 <link rel="manifest" href="/manifest.json">
 <meta name="theme-color" content="#082042">
@@ -107,7 +107,11 @@ textarea:disabled { opacity: .5; }
 .big { font: 500 1.6rem var(--font-mono); }
 .empty { color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 16px; margin: 0; }
 .copy { width: 100%; font: .8rem var(--font-mono); min-height: 140px; }
-.row { display: flex; gap: 6px; flex-wrap: wrap; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+html.kb body { padding-bottom: 60vh; }
+.editbox { display: grid; gap: 16px; border: 2px solid var(--ink); border-radius: 10px; padding: 14px; background: var(--bg); }
+.grp { font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 4px 0 0; font-weight: 700; }
+.confirmdel { background: var(--food-soft); border-radius: 8px; padding: 10px 12px; display: grid; gap: 8px; }
 @media (prefers-reduced-motion: no-preference) { .confirm { animation: rise .25s ease-out; } @keyframes rise { from { opacity: 0; transform: translateY(6px); } } }
 </style></head><body>
 
@@ -177,9 +181,10 @@ textarea:disabled { opacity: .5; }
   function uid() { return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : "i" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
 
   /* ---------- time ---------- */
-  function nyLocalNow() {
+  function nyLocalNow() { return nyLocalFrom(new Date()); }
+  function nyLocalFrom(d) {
     var p = {}; new Intl.DateTimeFormat("en-CA", { timeZone: TZ, hourCycle: "h23", year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })
-      .formatToParts(new Date()).forEach(function (x) { p[x.type] = x.value; });
+      .formatToParts(d).forEach(function (x) { p[x.type] = x.value; });
     return p.year + "-" + p.month + "-" + p.day + "T" + p.hour + ":" + p.minute;
   }
   function nyISO(local) { // wall-clock New York time -> ISO with offset
@@ -230,23 +235,36 @@ textarea:disabled { opacity: .5; }
     if (e.rated_by === "Guest") return "Guest" + (e.rater_name ? " (" + e.rater_name + ")" : "");
     return e.rated_by || e.created_by || "";
   }
-  function entryHtml(e) {
+  function entryHtml(e) { return entryCard(e, ""); }
+  function entryCard(e, extra) {
     var who = raterText(e);
     var out = '<div class="entry"><div class="top"><b>' + h(e.item) + "</b>" + pips(e.food_rating, "food") + "</div>" +
-      '<div class="meta">' + h(e.restaurant) + " · " + h(e.cuisine_type || "Unknown") + " · " + (e.service_type === "delivery" ? "Delivery" : "Dine-in") + " · " + fmtDate(e.occurred_at) + (who ? " · Rated by " + h(who) : "") + "</div>";
+      '<div class="meta">' + h(e.restaurant) + " · " + h(e.cuisine_type || "Unknown") + " · " + (e.service_type === "delivery" ? "Delivery" : "Dine-in") + " · " + fmtDate(e.occurred_at) + (who ? " · Rated by " + h(who) : "") + (e.updated_at ? " · edited" : "") + "</div>";
     if (e.food_comment) out += '<p class="cmt">' + h(e.food_comment) + "</p>";
     if (e.service_type === "delivery" && Number.isInteger(e.delivery_rating)) {
       out += '<div class="meta"><span class="badge deliv">Delivery</span> ' + h(e.delivery_app || "App not recorded") + " " + pips(e.delivery_rating, "deliv") + (e.delivery_comment ? " · " + h(e.delivery_comment) : "") + "</div>";
     }
-    return out + "</div>";
+    return out + (extra || "") + "</div>";
   }
   function emptyMsg(t) { return '<p class="empty">' + h(t) + "</p>"; }
   function showStatus(msg) { var s = $("status"); s.textContent = msg; s.hidden = !msg; }
 
-  function renderDiary() {
+  var ED = null;  // the entry being edited: { id, f, n, legacy, visit, err, saving }
+  var DL = null;  // id of an entry waiting for delete confirmation
+  var DLERR = "";
+  function renderDiary(force) {
+    if (ED && !force) return; // do not wipe an edit in progress when the list refreshes
     var list = state.entries.slice().sort(function (a, b) { return ts(b) - ts(a); });
-    $("diary").innerHTML = list.length ? '<div class="ask">' + list.map(entryHtml).join("") + "</div>" :
-      emptyMsg("No meals logged yet. Use the Log tab to add your first one.");
+    $("diary").innerHTML = list.length ? '<div class="ask">' + list.map(function (e) {
+      return ED && ED.id === e.entry_id ? editForm(e) : entryCard(e, rowActions(e));
+    }).join("") + "</div>" : emptyMsg("No meals logged yet. Use the Log tab to add your first one.");
+  }
+  function rowActions(e) {
+    if (DL === e.entry_id) {
+      return '<div class="confirmdel"><span><b>Delete ' + h(e.item) + "?</b> This can't be undone.</span>" + (DLERR ? '<span class="err">' + h(DLERR) + "</span>" : "") +
+        '<div class="row"><button type="button" class="btn alt" data-act="delNo">Keep it</button><button type="button" class="btn" data-act="delYes" data-id="' + h(e.entry_id) + '">Delete</button></div></div>';
+    }
+    return '<div class="row"><button type="button" class="link" data-act="edit" data-id="' + h(e.entry_id) + '">Edit</button><button type="button" class="link" data-act="del" data-id="' + h(e.entry_id) + '">Delete</button></div>';
   }
   function fillLists() {
     function uniq(f, extra) { var seen = {}, out = []; (extra || []).forEach(function (x) { seen[norm(x)] = 1; out.push(x); }); state.entries.forEach(function (e) { var v = (e[f] || "").trim(); if (v && !seen[norm(v)]) { seen[norm(v)] = 1; out.push(v); } }); return out; }
@@ -490,6 +508,128 @@ textarea:disabled { opacity: .5; }
     if (t.type === "checkbox" && f === "dnone") { L.dnone = t.checked; var ta = $("f-dcomment"); ta.disabled = t.checked; if (t.checked) { ta.value = ""; L.dcomment = ""; } }
     if (t.type === "checkbox" && d === "none") { var dd = L.dishes[L.cur]; dd.none = t.checked; var tb = $("d-comment"); tb.disabled = t.checked; if (t.checked) { tb.value = ""; dd.comment = ""; } }
     if (f === "when") L.when = t.value;
+  });
+
+  /* ---------- Diary tab: edit and delete ---------- */
+  function startEdit(e) {
+    var n = e.visit_id ? state.entries.filter(function (x) { return x.visit_id === e.visit_id; }).length : 1;
+    var isD = e.service_type === "delivery";
+    return { id: e.entry_id, n: n, legacy: !e.rated_by, visit: e.visit_id || e.entry_id, err: "", saving: false, f: {
+      rater: e.rated_by || null, guest: e.rater_name || "", item: e.item || "", rating: e.food_rating || 0, comment: e.food_comment || "",
+      cuisine: e.cuisine_type || "", restaurant: e.restaurant || "", service: e.service_type || "delivery",
+      delivLog: isD ? (Number.isInteger(e.delivery_rating) ? "yes" : "no") : null,
+      app: e.delivery_app || "", drate: e.delivery_rating || 0, dcomment: e.delivery_comment || "",
+      when: nyLocalFrom(new Date(e.occurred_at))
+    } };
+  }
+  function editForm(e) {
+    var f = ED.f, n = ED.n;
+    var s = '<div class="editbox"><h2>Edit dish</h2>';
+    s += '<div class="field"><span class="lbl">Who rated?' + (ED.legacy ? ' <span class="hint">not recorded</span>' : "") + '</span><div class="chips">' +
+      RATERS.map(function (r) { return chip("eRater", r, r, f.rater === r); }).join("") + "</div>";
+    if (f.rater === "Guest") s += '<input type="text" data-e="guest" value="' + h(f.guest) + '" placeholder="Guest\'s name (optional)" autocomplete="off" aria-label="Guest name">';
+    s += "</div>";
+    s += '<div class="field"><label for="e-item">Dish</label><input type="text" id="e-item" data-e="item" list="dl-item" value="' + h(f.item) + '" autocomplete="off"></div>';
+    s += '<div class="field"><span class="lbl">Food rating</span>' + rateBtns("eRating", f.rating, "food") + "</div>";
+    s += '<div class="field"><label for="e-comment">Food comment</label><textarea id="e-comment" data-e="comment">' + h(f.comment) + "</textarea></div>";
+    s += '<h3 class="grp">Visit details' + (n > 1 ? ' <span class="hint">apply to all ' + n + " dishes from this visit</span>" : "") + "</h3>";
+    s += '<div class="field"><label for="e-cuisine">Cuisine</label><input type="text" id="e-cuisine" data-e="cuisine" list="dl-cuisine" value="' + h(f.cuisine) + '" autocomplete="off"></div>';
+    s += '<div class="field"><label for="e-rest">Restaurant</label><input type="text" id="e-rest" data-e="restaurant" list="dl-rest" value="' + h(f.restaurant) + '" autocomplete="off"></div>';
+    s += '<div class="field"><span class="lbl">How did you eat?</span><div class="chips">' + chip("eService", "delivery", "Delivery", f.service === "delivery") + chip("eService", "dine_in", "Dine-in", f.service === "dine_in") + "</div></div>";
+    if (f.service === "delivery") {
+      s += '<div class="field"><span class="lbl">Delivery details logged?</span><div class="chips">' + chip("eDelivLog", "yes", "Yes", f.delivLog === "yes") + chip("eDelivLog", "no", "No", f.delivLog !== "yes") + "</div></div>";
+      if (f.delivLog === "yes") {
+        s += '<div class="deliv-box"><div class="field"><label for="e-app">Delivery app</label><input type="text" id="e-app" data-e="app" list="dl-app" value="' + h(f.app) + '" autocomplete="off"></div>' +
+          '<div class="field"><span class="lbl">Delivery rating</span>' + rateBtns("eDrate", f.drate, "deliv") + "</div>" +
+          '<div class="field"><label for="e-dcomment">Delivery comment</label><textarea id="e-dcomment" data-e="dcomment">' + h(f.dcomment) + "</textarea></div></div>";
+      }
+    }
+    s += '<div class="field"><label for="e-when">When <span class="hint">New York time</span></label><input type="datetime-local" id="e-when" data-e="when" value="' + h(f.when) + '"></div>';
+    s += '<p class="err" role="alert"' + (ED.err ? "" : " hidden") + ">" + h(ED.err) + "</p>";
+    s += '<div class="actions"><button type="button" class="btn alt" data-act="eCancel"' + (ED.saving ? " disabled" : "") + '>Cancel</button><button type="button" class="btn" data-act="eSave"' + (ED.saving ? " disabled" : "") + ">" + (ED.saving ? "Saving…" : "Save changes") + "</button></div>";
+    s += '<div class="row"><button type="button" class="link" data-act="del" data-id="' + h(e.entry_id) + '">Delete this dish</button></div></div>';
+    return s;
+  }
+  function checkEdit() {
+    var f = ED.f;
+    if (!f.item.trim()) return "Enter the dish.";
+    if (!(f.rating >= 1 && f.rating <= 5)) return "Pick a food rating from 1 to 5.";
+    if (!f.rater && !ED.legacy) return "Choose who rated.";
+    if (!f.cuisine.trim()) return "Enter a cuisine.";
+    if (!f.restaurant.trim()) return "Enter the restaurant.";
+    if (!nyISO(f.when)) return "Enter when you ate.";
+    if (f.service === "delivery" && f.delivLog === "yes") {
+      if (!f.app.trim()) return "Enter the delivery app.";
+      if (!(f.drate >= 1 && f.drate <= 5)) return "Pick a delivery rating from 1 to 5.";
+    }
+    return "";
+  }
+  async function saveEdit() {
+    if (ED.saving) return;
+    var bad = checkEdit(); if (bad) { ED.err = bad; renderDiary(true); return; }
+    var f = ED.f, withDel = f.service === "delivery" && f.delivLog === "yes";
+    var rec = {
+      entry_id: ED.id, visit_id: ED.visit, occurred_at: nyISO(f.when), rated_by: f.rater, rater_name: f.rater === "Guest" ? f.guest.trim() : null,
+      restaurant: f.restaurant.trim(), service_type: f.service, item: f.item.trim(), cuisine_type: f.cuisine.trim(),
+      food_rating: f.rating, food_comment: f.comment.trim(),
+      delivery_app: withDel ? f.app.trim() : null, delivery_rating: withDel ? f.drate : null, delivery_comment: withDel ? f.dcomment.trim() : null
+    };
+    ED.saving = true; ED.err = ""; renderDiary(true);
+    try {
+      var res = await fetch("/api/entries", { method: "PUT", headers: { "content-type": "application/json" }, body: JSON.stringify(rec) });
+      if (res.status === 401) { location.href = "/login"; return; }
+      var data = await res.json().catch(function () { return {}; });
+      if (!(res.ok && data.ok)) { ED.saving = false; ED.err = data.error || "The change could not be saved."; renderDiary(true); return; }
+    } catch (e) { ED.saving = false; ED.err = "Could not reach the server. Check your connection."; renderDiary(true); return; }
+    ED = null; await load(); fillLists(); renderDiary(true);
+  }
+  async function deleteEntry(id) {
+    DLERR = "";
+    try {
+      var res = await fetch("/api/entries?id=" + encodeURIComponent(id), { method: "DELETE" });
+      if (res.status === 401) { location.href = "/login"; return; }
+      var data = await res.json().catch(function () { return {}; });
+      if (!(res.ok && data.ok)) { DLERR = data.error || "The delete did not go through."; renderDiary(true); return; }
+    } catch (e) { DLERR = "Could not reach the server. Check your connection."; renderDiary(true); return; }
+    state.entries = state.entries.filter(function (x) { return x.entry_id !== id; });
+    DL = null; if (ED && ED.id === id) ED = null;
+    fillLists(); renderDiary(true);
+  }
+  var dActions = {
+    edit: function (v, el) { var id = el.getAttribute("data-id"), e = state.entries.filter(function (x) { return x.entry_id === id; })[0]; if (!e) return; DL = null; DLERR = ""; ED = startEdit(e); renderDiary(true); },
+    del: function (v, el) { DL = el.getAttribute("data-id"); DLERR = ""; ED = null; renderDiary(true); },
+    delNo: function () { DL = null; DLERR = ""; renderDiary(true); },
+    delYes: function (v, el) { deleteEntry(el.getAttribute("data-id")); },
+    eRater: function (v) { ED.f.rater = v; ED.err = ""; renderDiary(true); },
+    eRating: function (v) { ED.f.rating = +v; ED.err = ""; renderDiary(true); },
+    eService: function (v) { ED.f.service = v; if (v === "delivery" && !ED.f.delivLog) ED.f.delivLog = "no"; ED.err = ""; renderDiary(true); },
+    eDelivLog: function (v) { ED.f.delivLog = v; ED.err = ""; renderDiary(true); },
+    eDrate: function (v) { ED.f.drate = +v; ED.err = ""; renderDiary(true); },
+    eCancel: function () { ED = null; renderDiary(true); },
+    eSave: function () { saveEdit(); }
+  };
+  var dRoot = $("diary");
+  dRoot.addEventListener("click", function (ev) {
+    var el = ev.target.closest("[data-act]"); if (!el || !dRoot.contains(el) || el.disabled) return;
+    var fn = dActions[el.getAttribute("data-act")]; if (fn) fn(el.getAttribute("data-v"), el);
+  });
+  dRoot.addEventListener("input", function (ev) {
+    var k = ev.target.getAttribute("data-e"); if (k && ED) ED.f[k] = ev.target.value;
+  });
+
+  /* ---------- keyboard: keep the focused field visible ---------- */
+  function isTextField(t) { return t && /^(INPUT|TEXTAREA)$/.test(t.tagName) && t.type !== "checkbox" && t.type !== "radio"; }
+  function reveal(t) { try { t.scrollIntoView({ block: "center", behavior: "smooth" }); } catch (e) { t.scrollIntoView(); } }
+  document.addEventListener("focusin", function (ev) {
+    var t = ev.target; if (!isTextField(t)) return;
+    document.documentElement.classList.add("kb"); // gives the page room to scroll above the keyboard
+    setTimeout(function () { if (document.activeElement === t) reveal(t); }, 350);
+  });
+  document.addEventListener("focusout", function () {
+    setTimeout(function () { if (!isTextField(document.activeElement)) document.documentElement.classList.remove("kb"); }, 200);
+  });
+  if (window.visualViewport) window.visualViewport.addEventListener("resize", function () {
+    var a = document.activeElement; if (isTextField(a)) setTimeout(function () { reveal(a); }, 60);
   });
 
   /* ---------- ask forms ---------- */

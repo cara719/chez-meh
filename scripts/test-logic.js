@@ -20,4 +20,12 @@ assert.deepEqual(Q.top(E, 3).map((e) => e.item), ["Tonkotsu ramen", "ramen ", "R
 assert.equal(Q.top(E, 5, "japanese").length, 2);
 const g = Q.delivery(E, ""); assert.equal(g.length, 2); assert.equal(g[1].label, "DoorDash"); assert.equal(g[1].avg, "3.00"); assert.equal(g[1].n, 2);
 assert.equal(Q.favourite([], "x").matches, 0);
+// Two dishes from one order share a visit_id, so the delivery rating counts once.
+const V = [
+  { entry_id: "a1", visit_id: "v1", food_rating: 5, delivery_app: "DoorDash", delivery_rating: 4, occurred_at: d("15") },
+  { entry_id: "a2", visit_id: "v1", food_rating: 3, delivery_app: "DoorDash", delivery_rating: 4, occurred_at: d("15") },
+  { entry_id: "a3", visit_id: "v2", food_rating: 4, delivery_app: "doordash", delivery_rating: 2, occurred_at: d("16") },
+];
+const vg = Q.delivery(V, "");
+assert.equal(vg.length, 1); assert.equal(vg[0].n, 2); assert.equal(vg[0].avg, "3.00");
 console.log("All query-rule checks passed.");

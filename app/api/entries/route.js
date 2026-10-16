@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { db, ensureSchema } from "../../../lib/db";
 import { cleanEntry } from "../../../lib/validate";
 
-const COLS = ["entry_id", "schema_version", "occurred_at", "created_at", "created_by", "restaurant", "service_type", "item",
+const COLS = ["entry_id", "schema_version", "occurred_at", "created_at", "created_by", "visit_id", "rated_by", "rater_name", "restaurant", "service_type", "item",
   "cuisine_type", "food_rating", "food_comment", "delivery_app", "delivery_rating", "delivery_comment"];
 
 export async function GET() {

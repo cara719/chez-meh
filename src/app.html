@@ -10,21 +10,14 @@
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,600;12..96,800&family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500;700&display=swap">
 <style>
-/* Layout: single narrow column, sticky tab bar, cards only where a result or confirmation needs setting off. */
+/* Layout: single narrow column, sticky tab bar. The Log tab is a step flow: visit setup, one card per dish, review. */
 :root {
-  --bg: #F4F5F1;
-  --surface: #FFFFFF;
-  --ink: #172033;
-  --muted: #5C667A;
-  --line: #D9DDD3;
-  --food: #C2410C;
-  --food-soft: #FDEBDD;
-  --delivery: #0B7A75;
-  --delivery-soft: #DDF1EF;
-  --warn: #9A3412;
+  --bg: #F4F5F1; --surface: #FFFFFF; --ink: #172033; --muted: #5C667A; --line: #D9DDD3;
+  --food: #C2410C; --food-soft: #FDEBDD; --delivery: #0B7A75; --delivery-soft: #DDF1EF; --warn: #9A3412;
   --font-display: "Bricolage Grotesque", "Avenir Next", "Trebuchet MS", sans-serif;
   --font-body: "DM Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
   --font-mono: "DM Mono", ui-monospace, Menlo, Consolas, monospace;
+  color-scheme: light;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -39,8 +32,10 @@
   color-scheme: dark;
 }
 * { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html { background: var(--bg); }
 body {
-  background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.45;
+  margin: 0; background: var(--bg); color: var(--ink); font-family: var(--font-body); font-size: 16px; line-height: 1.45;
   padding-block: 0 56px;
   padding-left: max(16px, env(safe-area-inset-left, 0px));
   padding-right: max(16px, env(safe-area-inset-right, 0px));
@@ -50,15 +45,14 @@ header { padding-block: 22px 12px; }
 h1 { font-family: var(--font-display); font-weight: 800; font-size: 2.1rem; letter-spacing: -0.02em; margin: 0; line-height: 1; }
 h1 span { color: var(--food); }
 .tag { color: var(--muted); margin: 6px 0 0; font-size: .95rem; }
-h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.25rem; margin: 0 0 4px; text-wrap: balance; }
-h3 { font-size: .8rem; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 0 0 8px; font-weight: 700; }
+h2 { font-family: var(--font-display); font-weight: 600; font-size: 1.25rem; margin: 0; text-wrap: balance; }
 nav.tabs { position: sticky; top: env(safe-area-inset-top, 0px); z-index: 5; background: var(--bg); display: flex; gap: 4px; border-bottom: 1px solid var(--line); }
 body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 10; background: var(--bg); }
 nav.tabs button { flex: 1; background: none; border: 0; border-bottom: 3px solid transparent; color: var(--muted); font: 700 .95rem var(--font-body); padding: 12px 4px 10px; cursor: pointer; }
 nav.tabs button[aria-selected="true"] { color: var(--ink); border-bottom-color: var(--food); }
-button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible, summary:focus-visible { outline: 3px solid var(--delivery); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, select:focus-visible, textarea:focus-visible { outline: 3px solid var(--delivery); outline-offset: 2px; }
 section.panel { padding-top: 20px; display: grid; gap: 18px; }
-form { display: grid; gap: 16px; }
+.flow { display: grid; gap: 18px; }
 .field { display: grid; gap: 6px; min-width: 0; }
 label, .lbl { font-weight: 700; font-size: .9rem; }
 .hint { color: var(--muted); font-weight: 400; font-size: .85rem; }
@@ -66,39 +60,42 @@ input[type=text], input[type=number], input[type=datetime-local], textarea {
   width: 100%; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 11px 12px; min-height: 46px;
 }
 textarea { min-height: 76px; resize: vertical; }
-.seg { display: flex; gap: 8px; flex-wrap: wrap; }
-.seg label { flex: 1 1 0; min-width: 96px; position: relative; font-weight: 500; }
-.seg input { position: absolute; opacity: 0; inset: 0; }
-.seg span { display: block; text-align: center; padding: 11px 8px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); cursor: pointer; font-weight: 700; }
-.seg input:checked + span { background: var(--ink); color: var(--bg); border-color: var(--ink); }
-.seg input:focus-visible + span { outline: 3px solid var(--delivery); outline-offset: 2px; }
+textarea:disabled { opacity: .5; }
+.chips { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip { font: 700 .95rem var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; min-height: 44px; cursor: pointer; }
+.chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
+.chip small { font-weight: 400; opacity: .7; margin-left: 4px; }
 .rate { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
-.rate label { position: relative; font-weight: 500; }
-.rate input { position: absolute; opacity: 0; inset: 0; }
-.rate span { display: grid; place-items: center; height: 52px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); font: 500 1.25rem var(--font-mono); cursor: pointer; }
-.rate.food input:checked + span { background: var(--food); border-color: var(--food); color: #fff; }
-.rate.deliv input:checked + span { background: var(--delivery); border-color: var(--delivery); color: #fff; }
-.rate input:focus-visible + span { outline: 3px solid var(--delivery); outline-offset: 2px; }
+.rate button { height: 52px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 500 1.25rem var(--font-mono); cursor: pointer; }
+.rate.food button[aria-pressed="true"] { background: var(--food); border-color: var(--food); color: #fff; }
+.rate.deliv button[aria-pressed="true"] { background: var(--delivery); border-color: var(--delivery); color: #fff; }
 .check { display: flex; align-items: center; gap: 8px; font-weight: 400; font-size: .9rem; color: var(--muted); }
 .check input { width: 18px; height: 18px; }
 .deliv-box { border-left: 4px solid var(--delivery); padding: 4px 0 4px 14px; display: grid; gap: 16px; }
 .btn { font: 700 1rem var(--font-body); background: var(--ink); color: var(--bg); border: 0; border-radius: 8px; padding: 13px 18px; min-height: 48px; cursor: pointer; }
 .btn.alt { background: var(--surface); color: var(--ink); border: 1px solid var(--line); }
+.btn.grow { flex: 1 1 auto; }
 .btn[disabled] { opacity: .5; cursor: default; }
+.actions { display: flex; flex-wrap: wrap; gap: 10px; }
+.actions .btn { flex: 1 1 140px; }
+.link { background: none; border: 0; color: var(--muted); font: 700 .85rem var(--font-body); text-decoration: underline; cursor: pointer; padding: 6px 4px; }
 .err { color: var(--warn); font-weight: 500; margin: 0; }
-.banner { background: var(--food-soft); color: var(--ink); border-radius: 8px; padding: 12px 14px; }
-.confirm { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 10px; }
-.confirm h2 { margin: 0; }
+.banner { background: var(--food-soft); color: var(--ink); border-radius: 8px; padding: 12px 14px; margin-top: 14px; }
+.stephead { display: flex; justify-content: space-between; align-items: center; gap: 10px; }
+.dots { display: flex; gap: 6px; }
+.dots i { width: 10px; height: 10px; border-radius: 50%; background: var(--line); }
+.dots i.on { background: var(--food); }
+.dots i.done { background: var(--ink); }
+.confirm { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 16px; display: grid; gap: 12px; }
 .pips { font-family: var(--font-mono); letter-spacing: .12em; white-space: nowrap; }
 .pips.food { color: var(--food); } .pips.deliv { color: var(--delivery); }
 .badge { display: inline-block; font: 500 .72rem var(--font-mono); text-transform: uppercase; letter-spacing: .06em; padding: 2px 7px; border-radius: 4px; }
-.badge.food { background: var(--food-soft); color: var(--food); }
 .badge.deliv { background: var(--delivery-soft); color: var(--delivery); }
 .ask { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 14px; display: grid; gap: 10px; }
-.ask form { grid-template-columns: 1fr auto; align-items: end; gap: 10px; }
+.ask form { display: grid; grid-template-columns: 1fr auto; align-items: end; gap: 10px; }
 .ask form.three { grid-template-columns: 1fr 1fr auto; }
-.ask .result { display: grid; gap: 12px; }
-.ask .result:empty { display: none; }
+.result { display: grid; gap: 12px; }
+.result:empty { display: none; }
 @media (max-width: 460px) { .ask form, .ask form.three { grid-template-columns: 1fr; } }
 .entry { border-top: 1px solid var(--line); padding-top: 12px; display: grid; gap: 4px; min-width: 0; }
 .entry:first-child { border-top: 0; padding-top: 0; }
@@ -109,17 +106,14 @@ textarea { min-height: 76px; resize: vertical; }
 .big { font: 500 1.6rem var(--font-mono); }
 .empty { color: var(--muted); border: 1px dashed var(--line); border-radius: 10px; padding: 16px; margin: 0; }
 .copy { width: 100%; font: .8rem var(--font-mono); min-height: 140px; }
+.row { display: flex; gap: 6px; flex-wrap: wrap; }
 @media (prefers-reduced-motion: no-preference) { .confirm { animation: rise .25s ease-out; } @keyframes rise { from { opacity: 0; transform: translateY(6px); } } }
-.who { display: flex; align-items: center; gap: 8px; margin-top: 10px; font-size: .85rem; color: var(--muted); }
-.who select { font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 8px; padding: 6px 8px; }
-html { background: var(--bg); } body { margin: 0; }
 </style></head><body>
 
 <div class="wrap">
   <header>
     <h1>Chez <span>Meh</span></h1>
     <p class="tag">Your restaurant diary. Food and delivery are rated separately.</p>
-    <div class="who"><label for="who">Logging as</label><select id="who"><option>Cara</option><option>Jason</option></select></div>
   </header>
   <nav class="tabs" role="tablist" aria-label="Sections">
     <button role="tab" id="t-log" aria-selected="true" aria-controls="p-log">Log</button>
@@ -128,73 +122,10 @@ html { background: var(--bg); } body { margin: 0; }
   </nav>
 
   <div id="status" class="banner" hidden></div>
+  <datalist id="dl-rest"></datalist><datalist id="dl-item"></datalist><datalist id="dl-cuisine"></datalist><datalist id="dl-app"></datalist>
 
   <section class="panel" id="p-log" role="tabpanel" aria-labelledby="t-log">
-    <form id="logForm" novalidate>
-      <div class="field">
-        <label for="restaurant">Restaurant</label>
-        <input type="text" id="restaurant" list="dl-rest" autocomplete="off" placeholder="e.g. Example Curry House">
-        <datalist id="dl-rest"></datalist>
-      </div>
-      <div class="field">
-        <span class="lbl" id="svc-lbl">How did you eat?</span>
-        <div class="seg" role="radiogroup" aria-labelledby="svc-lbl">
-          <label><input type="radio" name="service" value="dine_in"><span>Dine-in</span></label>
-          <label><input type="radio" name="service" value="delivery"><span>Delivery</span></label>
-        </div>
-      </div>
-      <div class="field">
-        <label for="item">Dish</label>
-        <input type="text" id="item" list="dl-item" autocomplete="off" placeholder="e.g. Chicken tikka masala">
-        <datalist id="dl-item"></datalist>
-      </div>
-      <div class="field">
-        <label for="cuisine">Cuisine <span class="hint">Pick one or type your own</span></label>
-        <input type="text" id="cuisine" list="dl-cuisine" autocomplete="off" placeholder="Indian, Thai, American, Unknown">
-        <datalist id="dl-cuisine"></datalist>
-      </div>
-      <div class="field">
-        <span class="lbl" id="fr-lbl">Food rating <span class="hint">1 to 5, about the food only</span></span>
-        <div class="rate food" role="radiogroup" aria-labelledby="fr-lbl" id="foodRate"></div>
-      </div>
-      <div class="field">
-        <label for="fcomment">Food comment</label>
-        <textarea id="fcomment" placeholder="What stood out?"></textarea>
-        <label class="check"><input type="checkbox" id="fnone"> No comment</label>
-      </div>
-
-      <div class="field" id="delivAsk" hidden>
-        <span class="lbl" id="da-lbl">Log delivery details too?</span>
-        <div class="seg" role="radiogroup" aria-labelledby="da-lbl">
-          <label><input type="radio" name="delivlog" value="yes"><span>Yes</span></label>
-          <label><input type="radio" name="delivlog" value="no"><span>No, food only</span></label>
-        </div>
-      </div>
-      <div class="deliv-box" id="delivBox" hidden>
-        <div class="field">
-          <label for="dapp">Delivery app</label>
-          <input type="text" id="dapp" list="dl-app" autocomplete="off" placeholder="DoorDash, Uber Eats, Grubhub">
-          <datalist id="dl-app"></datalist>
-        </div>
-        <div class="field">
-          <span class="lbl" id="dr-lbl">Delivery rating <span class="hint">1 to 5, about the delivery service only</span></span>
-          <div class="rate deliv" role="radiogroup" aria-labelledby="dr-lbl" id="delivRate"></div>
-        </div>
-        <div class="field">
-          <label for="dcomment">Delivery comment</label>
-          <textarea id="dcomment" placeholder="On time? Packaging? Driver?"></textarea>
-          <label class="check"><input type="checkbox" id="dnone"> No comment</label>
-        </div>
-      </div>
-
-      <div class="field">
-        <label for="when">When <span class="hint">New York time</span></label>
-        <input type="datetime-local" id="when">
-      </div>
-      <p class="err" id="logErr" role="alert" hidden></p>
-      <button class="btn" type="submit" id="saveBtn">Save meal</button>
-    </form>
-    <div id="logResult"></div>
+    <div id="logRoot" class="flow"></div>
   </section>
 
   <section class="panel" id="p-ask" role="tabpanel" aria-labelledby="t-ask" hidden>
@@ -234,6 +165,7 @@ html { background: var(--bg); } body { margin: 0; }
   "use strict";
   var TZ = "America/New_York";
   var CUISINES = ["American", "Chinese", "French", "Indian", "Italian", "Japanese", "Korean", "Mexican", "Thai", "Vietnamese", "Unknown"];
+  var RATERS = ["Cara", "Jason", "Both", "Guest"];
   var state = { entries: [] };
   var $ = function (id) { return document.getElementById(id); };
   function h(s) { return String(s == null ? "" : s).replace(/[&<>"']/g, function (c) { return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]; }); }
@@ -241,6 +173,7 @@ html { background: var(--bg); } body { margin: 0; }
   function pips(n, cls) { var s = ""; for (var i = 1; i <= 5; i++) s += i <= n ? "●" : "○"; return '<span class="pips ' + cls + '" aria-label="' + n + ' out of 5">' + s + "</span>"; }
   function fmtDate(iso) { var d = new Date(iso); return isNaN(d) ? "Unknown date" : d.toLocaleDateString("en-US", { timeZone: TZ, month: "short", day: "numeric", year: "numeric" }); }
   function ts(e) { var t = Date.parse(e.occurred_at); return isNaN(t) ? 0 : t; }
+  function uid() { return (window.crypto && crypto.randomUUID) ? crypto.randomUUID() : "i" + Date.now().toString(36) + Math.random().toString(36).slice(2, 10); }
 
   /* ---------- time ---------- */
   function nyLocalNow() {
@@ -276,10 +209,11 @@ html { background: var(--bg); } body { margin: 0; }
       return entries.filter(function (e) { return Number.isInteger(e.food_rating) && (!c || norm(e.cuisine_type) === c); })
         .sort(function (a, b) { return b.food_rating - a.food_rating || ts(b) - ts(a); }).slice(0, n);
     },
-    delivery: function (entries, app) {
-      var k = norm(app), g = {};
+    delivery: function (entries, app) { // one rating per order: dishes sharing a visit_id count once
+      var k = norm(app), g = {}, seen = {};
       entries.forEach(function (e) {
         if (!Number.isInteger(e.delivery_rating)) return;
+        var vk = e.visit_id || e.entry_id; if (vk) { if (seen[vk]) return; seen[vk] = 1; }
         var a = e.delivery_app ? e.delivery_app.trim() : "";
         if (k && norm(a) !== k) return;
         var key = a ? norm(a) : "";
@@ -289,14 +223,16 @@ html { background: var(--bg); } body { margin: 0; }
       return Object.keys(g).map(function (x) { var o = g[x]; o.avg = (o.sum / o.n).toFixed(2); return o; }).sort(function (a, b) { return b.sum / b.n - a.sum / a.n; });
     }
   };
-  window.__chezMehQ = Q; // exposed so the logic can be checked from the console
 
-  /* ---------- rendering ---------- */
-  function entryHtml(e, opts) {
-    opts = opts || {};
-    var who = opts.who && e.created_by ? " · " + h(e.created_by) : "";
+  /* ---------- shared rendering ---------- */
+  function raterText(e) {
+    if (e.rated_by === "Guest") return "Guest" + (e.rater_name ? " (" + e.rater_name + ")" : "");
+    return e.rated_by || e.created_by || "";
+  }
+  function entryHtml(e) {
+    var who = raterText(e);
     var out = '<div class="entry"><div class="top"><b>' + h(e.item) + "</b>" + pips(e.food_rating, "food") + "</div>" +
-      '<div class="meta">' + h(e.restaurant) + " · " + h(e.cuisine_type || "Unknown") + " · " + (e.service_type === "delivery" ? "Delivery" : "Dine-in") + " · " + fmtDate(e.occurred_at) + who + "</div>";
+      '<div class="meta">' + h(e.restaurant) + " · " + h(e.cuisine_type || "Unknown") + " · " + (e.service_type === "delivery" ? "Delivery" : "Dine-in") + " · " + fmtDate(e.occurred_at) + (who ? " · Rated by " + h(who) : "") + "</div>";
     if (e.food_comment) out += '<p class="cmt">' + h(e.food_comment) + "</p>";
     if (e.service_type === "delivery" && Number.isInteger(e.delivery_rating)) {
       out += '<div class="meta"><span class="badge deliv">Delivery</span> ' + h(e.delivery_app || "App not recorded") + " " + pips(e.delivery_rating, "deliv") + (e.delivery_comment ? " · " + h(e.delivery_comment) : "") + "</div>";
@@ -304,10 +240,11 @@ html { background: var(--bg); } body { margin: 0; }
     return out + "</div>";
   }
   function emptyMsg(t) { return '<p class="empty">' + h(t) + "</p>"; }
+  function showStatus(msg) { var s = $("status"); s.textContent = msg; s.hidden = !msg; }
 
   function renderDiary() {
     var list = state.entries.slice().sort(function (a, b) { return ts(b) - ts(a); });
-    $("diary").innerHTML = list.length ? '<div class="ask">' + list.map(function (e) { return entryHtml(e, { who: true }); }).join("") + "</div>" :
+    $("diary").innerHTML = list.length ? '<div class="ask">' + list.map(entryHtml).join("") + "</div>" :
       emptyMsg("No meals logged yet. Use the Log tab to add your first one.");
   }
   function fillLists() {
@@ -318,9 +255,11 @@ html { background: var(--bg); } body { margin: 0; }
     $("dl-cuisine").innerHTML = opts(uniq("cuisine_type", CUISINES));
     $("dl-app").innerHTML = opts(uniq("delivery_app", ["DoorDash", "Uber Eats", "Grubhub"]));
   }
-  function refresh() { fillLists(); renderDiary(); }
-
-  function showStatus(msg) { var s = $("status"); s.textContent = msg; s.hidden = !msg; s.style.marginTop = "14px"; }
+  function refresh() {
+    fillLists(); renderDiary();
+    var a = document.activeElement;
+    if (L && L.phase === "setup" && !(a && /^(INPUT|TEXTAREA)$/.test(a.tagName))) renderLog();
+  }
 
   /* ---------- tabs ---------- */
   var tabs = ["log", "ask", "diary"];
@@ -331,81 +270,225 @@ html { background: var(--bg); } body { margin: 0; }
     });
   });
 
-  /* ---------- form wiring ---------- */
-  function buildRate(id, name) {
-    var html = ""; for (var i = 1; i <= 5; i++) html += '<label><input type="radio" name="' + name + '" value="' + i + '"><span>' + i + "</span></label>";
-    $(id).innerHTML = html;
+  /* ---------- Log tab: a visit is setup -> one card per dish -> review ---------- */
+  var L = null;
+  function newDish(prevRater) { return { id: uid(), rater: prevRater || null, guest: "", item: "", rating: 0, comment: "", none: false, saved: false }; }
+  function resetLog() {
+    L = { phase: "setup", cuisine: "", cuisineOther: false, restaurant: "", addingNew: false, service: "delivery", delivLog: null,
+      app: "", drate: 0, dcomment: "", dnone: false, when: nyLocalNow(), visit: uid(), dishes: [newDish()], cur: 0,
+      err: "", pending: null, saving: false, savedRecs: [] };
   }
-  buildRate("foodRate", "frate"); buildRate("delivRate", "drate");
-  function radio(name) { var r = document.querySelector('input[name="' + name + '"]:checked'); return r ? r.value : null; }
-  function syncDeliv() {
-    var isD = radio("service") === "delivery";
-    $("delivAsk").hidden = !isD;
-    $("delivBox").hidden = !(isD && radio("delivlog") === "yes");
+  function chip(act, v, label, on, extra) {
+    return '<button type="button" class="chip" data-act="' + act + '" data-v="' + h(v) + '" aria-pressed="' + (on ? "true" : "false") + '">' + h(label) + (extra || "") + "</button>";
   }
-  document.querySelectorAll('input[name="service"], input[name="delivlog"]').forEach(function (r) { r.addEventListener("change", syncDeliv); });
-  $("fnone").addEventListener("change", function () { $("fcomment").disabled = this.checked; if (this.checked) $("fcomment").value = ""; });
-  $("dnone").addEventListener("change", function () { $("dcomment").disabled = this.checked; if (this.checked) $("dcomment").value = ""; });
-  $("when").value = nyLocalNow();
-
-  function resetForm() {
-    $("logForm").reset(); $("fcomment").disabled = false; $("dcomment").disabled = false; $("when").value = nyLocalNow(); syncDeliv();
-  }
-  function err(msg) { var e = $("logErr"); e.textContent = msg || ""; e.hidden = !msg; }
-
-  function summaryHtml(r, saved) {
-    var s = '<div class="confirm"><h2>' + (saved ? "Saved to the diary" : "Not saved") + "</h2>" + entryHtml(r);
+  function rateBtns(act, val, cls) {
+    var s = '<div class="rate ' + cls + '" role="group">';
+    for (var i = 1; i <= 5; i++) s += '<button type="button" data-act="' + act + '" data-v="' + i + '" aria-pressed="' + (val === i ? "true" : "false") + '" aria-label="' + i + ' out of 5">' + i + "</button>";
     return s + "</div>";
   }
+  function cuisineList() {
+    var seen = {}, out = [];
+    function add(c) { c = (c || "").trim(); if (c && !seen[norm(c)]) { seen[norm(c)] = 1; out.push(c); } }
+    CUISINES.forEach(add); state.entries.forEach(function (e) { add(e.cuisine_type); });
+    return out;
+  }
+  function restaurantsFor(c) {
+    var k = norm(c), m = {};
+    state.entries.forEach(function (e) {
+      if (norm(e.cuisine_type) !== k) return;
+      var r = (e.restaurant || "").trim(); if (!r) return;
+      var n = norm(r); if (!m[n]) m[n] = { name: r, count: 0, last: 0 };
+      m[n].count++; m[n].last = Math.max(m[n].last, ts(e));
+    });
+    return Object.keys(m).map(function (x) { return m[x]; }).sort(function (a, b) { return b.last - a.last; });
+  }
+  function svcLabel() { return L.service === "delivery" ? "Delivery" : "Dine-in"; }
 
-  $("logForm").addEventListener("submit", async function (ev) {
-    ev.preventDefault(); err(""); $("logResult").innerHTML = "";
-    var restaurant = $("restaurant").value.trim(), item = $("item").value.trim(), cuisine = $("cuisine").value.trim();
-    var service = radio("service"), fr = parseInt(radio("frate"), 10), fnone = $("fnone").checked, fc = $("fcomment").value.trim();
-    if (!restaurant) return err("Enter the restaurant.");
-    if (!service) return err("Choose dine-in or delivery.");
-    if (!item) return err("Enter the dish.");
-    if (!cuisine) return err("Enter a cuisine, or type Unknown.");
-    if (!(fr >= 1 && fr <= 5)) return err("Pick a food rating from 1 to 5.");
-    if (!fc && !fnone) return err("Add a food comment, or tick No comment.");
-    var when = nyISO($("when").value); if (!when) return err("Enter when you ate.");
-    var rec = {
-      schema_version: 1, entry_id: (crypto.randomUUID ? crypto.randomUUID() : "e" + Date.now() + Math.random().toString(36).slice(2, 8)),
-      occurred_at: when, created_at: new Date().toISOString(), created_by: $("who").value || null,
-      restaurant: restaurant, service_type: service, item: item, cuisine_type: cuisine, food_rating: fr, food_comment: fc,
-      delivery_app: null, delivery_rating: null, delivery_comment: null
-    };
-    if (service === "delivery") {
-      var dl = radio("delivlog");
-      if (!dl) return err("Choose whether to log delivery details.");
-      if (dl === "yes") {
-        var app = $("dapp").value.trim(), dr = parseInt(radio("drate"), 10), dnone = $("dnone").checked, dc = $("dcomment").value.trim();
-        if (!app) return err("Enter the delivery app.");
-        if (!(dr >= 1 && dr <= 5)) return err("Pick a delivery rating from 1 to 5.");
-        if (!dc && !dnone) return err("Add a delivery comment, or tick No comment.");
-        rec.delivery_app = app; rec.delivery_rating = dr; rec.delivery_comment = dc;
+  function viewSetup() {
+    var cl = cuisineList(), s = '<div class="flow"><h2>New visit</h2>';
+    s += '<div class="field"><span class="lbl">Cuisine</span><div class="chips">' +
+      cl.map(function (c) { return chip("cuisine", c, c, !L.cuisineOther && norm(L.cuisine) === norm(c)); }).join("") +
+      chip("cuisineOther", "", "Other…", L.cuisineOther) + "</div>";
+    if (L.cuisineOther) s += '<input type="text" id="f-cuisine" data-f="cuisine" value="' + h(L.cuisine) + '" placeholder="Type a cuisine" autocomplete="off" aria-label="Other cuisine">';
+    s += "</div>";
+    if (L.cuisine.trim() || L.cuisineOther) {
+      var rs = restaurantsFor(L.cuisine), adding = L.addingNew || !rs.length;
+      s += '<div class="field"><span class="lbl">Restaurant</span><div class="chips">' +
+        rs.map(function (r) { return chip("rest", r.name, r.name, !adding && norm(L.restaurant) === norm(r.name), "<small>" + r.count + "</small>"); }).join("") +
+        chip("restNew", "", "+ New restaurant", adding) + "</div>";
+      if (adding) s += '<input type="text" id="f-restaurant" data-f="restaurant" list="dl-rest" value="' + h(L.restaurant) + '" placeholder="Restaurant name" autocomplete="off" aria-label="New restaurant name">';
+      s += "</div>";
+      s += '<div class="field"><span class="lbl">How did you eat?</span><div class="chips">' +
+        chip("service", "delivery", "Delivery", L.service === "delivery") + chip("service", "dine_in", "Dine-in", L.service === "dine_in") + "</div></div>";
+      if (L.service === "delivery") {
+        s += '<div class="field"><span class="lbl">Log delivery details too?</span><div class="chips">' +
+          chip("delivLog", "yes", "Yes", L.delivLog === "yes") + chip("delivLog", "no", "No, food only", L.delivLog === "no") + "</div></div>";
+        if (L.delivLog === "yes") {
+          s += '<div class="deliv-box"><div class="field"><label for="f-app">Delivery app</label><input type="text" id="f-app" data-f="app" list="dl-app" value="' + h(L.app) + '" placeholder="DoorDash, Uber Eats, Grubhub" autocomplete="off"></div>' +
+            '<div class="field"><span class="lbl">Delivery rating <span class="hint">1 to 5, about the delivery service only</span></span>' + rateBtns("drate", L.drate, "deliv") + "</div>" +
+            '<div class="field"><label for="f-dcomment">Delivery comment</label><textarea id="f-dcomment" data-f="dcomment"' + (L.dnone ? " disabled" : "") + ' placeholder="On time? Packaging? Driver?">' + h(L.dcomment) + '</textarea>' +
+            '<label class="check"><input type="checkbox" id="f-dnone" data-f="dnone"' + (L.dnone ? " checked" : "") + "> No comment</label></div></div>";
+        }
+      }
+      s += '<div class="field"><label for="f-when">When <span class="hint">New York time</span></label><input type="datetime-local" id="f-when" data-f="when" value="' + h(L.when) + '"></div>';
+    }
+    s += '<p class="err" id="logErr" role="alert"' + (L.err ? "" : " hidden") + ">" + h(L.err) + "</p>";
+    s += '<button class="btn" type="button" data-act="toDishes">Next: add dishes</button></div>';
+    return s;
+  }
+
+  function visitLine() { return h(L.cuisine) + " · " + h(L.restaurant) + " · " + svcLabel(); }
+  function viewDish() {
+    var d = L.dishes[L.cur], n = L.dishes.length, last = L.cur === n - 1;
+    var dots = ""; for (var i = 0; i < n; i++) dots += '<i class="' + (i === L.cur ? "on" : (i < L.cur ? "done" : "")) + '"></i>';
+    var s = '<div class="flow"><div class="stephead"><h2>Dish ' + (L.cur + 1) + " of " + n + '</h2><div class="dots" aria-hidden="true">' + dots + "</div></div>";
+    s += '<div class="meta">' + visitLine() + "</div>";
+    s += '<div class="field"><span class="lbl">Who is rating?</span><div class="chips">' + RATERS.map(function (r) { return chip("rater", r, r, d.rater === r); }).join("") + "</div>";
+    if (d.rater === "Guest") s += '<input type="text" id="d-guest" data-d="guest" value="' + h(d.guest) + '" placeholder="Guest\'s name (optional)" autocomplete="off" aria-label="Guest name">';
+    s += "</div>";
+    s += '<div class="field"><label for="d-item">Dish</label><input type="text" id="d-item" data-d="item" list="dl-item" value="' + h(d.item) + '" placeholder="e.g. Chicken tikka masala" autocomplete="off"></div>';
+    s += '<div class="field"><span class="lbl">Food rating <span class="hint">1 to 5, about the food only</span></span>' + rateBtns("rating", d.rating, "food") + "</div>";
+    s += '<div class="field"><label for="d-comment">Food comment</label><textarea id="d-comment" data-d="comment"' + (d.none ? " disabled" : "") + ' placeholder="What stood out?">' + h(d.comment) + '</textarea>' +
+      '<label class="check"><input type="checkbox" id="d-none" data-d="none"' + (d.none ? " checked" : "") + "> No comment</label></div>";
+    s += '<p class="err" id="logErr" role="alert"' + (L.err ? "" : " hidden") + ">" + h(L.err) + "</p>";
+    s += '<div class="actions"><button class="btn alt" type="button" data-act="dishBack">Back</button>' +
+      (last ? '<button class="btn alt" type="button" data-act="addDish">+ Add another dish</button>' : '<button class="btn alt" type="button" data-act="dishNext">Next dish</button>') +
+      '<button class="btn" type="button" data-act="toReview">Review &amp; save</button></div></div>';
+    return s;
+  }
+
+  function viewReview() {
+    var s = '<div class="flow"><h2>Review</h2><div class="confirm"><div><b>' + h(L.restaurant) + '</b><div class="meta">' + h(L.cuisine) + " · " + svcLabel() + " · " + fmtDate(nyISO(L.when)) + "</div></div>";
+    if (L.service === "delivery") {
+      s += L.delivLog === "yes"
+        ? '<div class="meta"><span class="badge deliv">Delivery</span> ' + h(L.app) + " " + pips(L.drate, "deliv") + (L.dcomment ? " · " + h(L.dcomment) : "") + "</div>"
+        : '<div class="meta">Delivery details not logged.</div>';
+    }
+    L.dishes.forEach(function (d, i) {
+      var who = d.rater === "Guest" ? "Guest" + (d.guest.trim() ? " (" + d.guest.trim() + ")" : "") : d.rater;
+      s += '<div class="entry"><div class="top"><b>' + h(d.item) + "</b>" + pips(d.rating, "food") + '</div><div class="meta">Rated by ' + h(who) + "</div>" +
+        (d.comment ? '<p class="cmt">' + h(d.comment) + "</p>" : "") +
+        '<div class="row"><button type="button" class="link" data-act="editDish" data-i="' + i + '">Edit</button>' +
+        (L.dishes.length > 1 ? '<button type="button" class="link" data-act="removeDish" data-i="' + i + '">Remove</button>' : "") + "</div></div>";
+    });
+    s += "</div>";
+    s += '<p class="err" id="logErr" role="alert"' + (L.err ? "" : " hidden") + ">" + h(L.err) + "</p>";
+    if (L.pending) s += '<div class="field"><label for="pendingTa">Not saved yet. You can copy this and keep it.</label><textarea class="copy" id="pendingTa" readonly>' + h(L.pending) + '</textarea><button type="button" class="btn alt" data-act="copy">Copy</button></div>';
+    s += '<div class="actions"><button class="btn alt" type="button" data-act="backToDishes"' + (L.saving ? " disabled" : "") + '>Back to dishes</button>' +
+      '<button class="btn" type="button" data-act="save"' + (L.saving ? " disabled" : "") + ">" + (L.saving ? "Saving…" : "Save " + L.dishes.length + (L.dishes.length === 1 ? " dish" : " dishes")) + "</button></div></div>";
+    return s;
+  }
+
+  function viewDone() {
+    return '<div class="flow"><div class="confirm"><h2>Saved to the diary</h2>' + L.savedRecs.map(entryHtml).join("") + "</div>" +
+      '<button class="btn" type="button" data-act="again">Log another visit</button></div>';
+  }
+
+  function renderLog(noScroll) {
+    var v = L.phase === "setup" ? viewSetup() : L.phase === "dish" ? viewDish() : L.phase === "review" ? viewReview() : viewDone();
+    $("logRoot").innerHTML = v;
+  }
+  function go(phase) {
+    L.phase = phase; L.err = ""; renderLog();
+    var nav = document.querySelector("nav.tabs"); if (nav && nav.scrollIntoView) nav.scrollIntoView({ block: "start" });
+  }
+  function setErr(msg) { L.err = msg; var e = $("logErr"); if (e) { e.textContent = msg; e.hidden = !msg; } }
+
+  function checkSetup() {
+    if (!L.cuisine.trim()) return "Pick a cuisine.";
+    if (!L.restaurant.trim()) return "Pick a restaurant or add a new one.";
+    if (L.service === "delivery") {
+      if (!L.delivLog) return "Choose whether to log delivery details.";
+      if (L.delivLog === "yes") {
+        if (!L.app.trim()) return "Enter the delivery app.";
+        if (!(L.drate >= 1 && L.drate <= 5)) return "Pick a delivery rating from 1 to 5.";
+        if (!L.dcomment.trim() && !L.dnone) return "Add a delivery comment, or tick No comment.";
       }
     }
-    var btn = $("saveBtn"); btn.disabled = true; btn.textContent = "Saving…";
-    var ok = false, why = "";
-    try {
-      var res = await fetch("/api/entries", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(rec) });
-      if (res.status === 401) { location.href = "/login"; return; }
-      var data = await res.json().catch(function () { return {}; });
-      ok = res.ok && data.ok && data.entry && data.entry.entry_id === rec.entry_id;
-      if (!ok) why = data.error || "The save could not be confirmed.";
-      else { state.entries.push(data.entry); refresh(); }
-    } catch (e) { why = "Could not reach the server. Check your connection."; }
-    btn.disabled = false; btn.textContent = "Save meal";
-    if (ok) { $("logResult").innerHTML = summaryHtml(rec, true); resetForm(); }
-    else {
-      var pending = JSON.stringify(rec, null, 2);
-      $("logResult").innerHTML = '<div class="confirm"><h2>Not saved</h2><p class="err">' + h(why) + ' Copy this record and try again later.</p><textarea class="copy" readonly id="pending">' + h(pending) + '</textarea><button class="btn alt" type="button" id="copyBtn">Copy record</button></div>';
-      $("copyBtn").addEventListener("click", function () {
-        var ta = $("pending"); ta.select();
-        if (navigator.clipboard) navigator.clipboard.writeText(pending).catch(function () {});
-      });
+    if (!nyISO(L.when)) return "Enter when you ate.";
+    return "";
+  }
+  function checkDish(d) {
+    if (!d.rater) return "Choose who is rating.";
+    if (!d.item.trim()) return "Enter the dish.";
+    if (!(d.rating >= 1 && d.rating <= 5)) return "Pick a food rating from 1 to 5.";
+    if (!d.comment.trim() && !d.none) return "Add a food comment, or tick No comment.";
+    return "";
+  }
+  function recFor(d) {
+    var r = {
+      entry_id: d.id, visit_id: L.visit, occurred_at: nyISO(L.when), created_by: null,
+      rated_by: d.rater, rater_name: d.rater === "Guest" ? d.guest.trim() : null,
+      restaurant: L.restaurant.trim(), service_type: L.service, item: d.item.trim(), cuisine_type: L.cuisine.trim(),
+      food_rating: d.rating, food_comment: d.comment.trim(),
+      delivery_app: null, delivery_rating: null, delivery_comment: null
+    };
+    if (L.service === "delivery" && L.delivLog === "yes") { r.delivery_app = L.app.trim(); r.delivery_rating = L.drate; r.delivery_comment = L.dcomment.trim(); }
+    return r;
+  }
+  function upsert(e) {
+    for (var i = 0; i < state.entries.length; i++) if (state.entries[i].entry_id === e.entry_id) { state.entries[i] = e; return; }
+    state.entries.push(e);
+  }
+
+  async function saveAll() {
+    if (L.saving) return;
+    L.saving = true; L.err = ""; L.pending = null; renderLog();
+    var saved = [], failed = [], why = "";
+    for (var i = 0; i < L.dishes.length; i++) {
+      var d = L.dishes[i], rec = recFor(d);
+      if (d.saved) { saved.push(rec); continue; }
+      try {
+        var res = await fetch("/api/entries", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(rec) });
+        if (res.status === 401) { location.href = "/login"; return; }
+        var data = await res.json().catch(function () { return {}; });
+        if (res.ok && data.ok && data.entry && data.entry.entry_id === rec.entry_id) { d.saved = true; saved.push(data.entry); upsert(data.entry); }
+        else { failed.push(rec); why = data.error || "The save could not be confirmed."; }
+      } catch (e) { failed.push(rec); why = "Could not reach the server. Check your connection."; }
     }
+    L.saving = false;
+    if (!failed.length) { L.phase = "done"; L.savedRecs = saved; }
+    else { L.err = "Saved " + saved.length + " of " + L.dishes.length + ". " + why + " Nothing is lost: tap Save again to retry the rest."; L.pending = JSON.stringify(failed, null, 2); }
+    fillLists(); renderDiary(); renderLog();
+  }
+
+  var actions = {
+    cuisine: function (v) { L.cuisine = v; L.cuisineOther = false; L.restaurant = ""; L.addingNew = false; L.err = ""; renderLog(); },
+    cuisineOther: function () { L.cuisineOther = true; L.cuisine = ""; L.restaurant = ""; L.addingNew = false; L.err = ""; renderLog(); },
+    rest: function (v) { L.restaurant = v; L.addingNew = false; L.err = ""; renderLog(); },
+    restNew: function () { L.addingNew = true; L.restaurant = ""; L.err = ""; renderLog(); var i = $("f-restaurant"); if (i) i.focus(); },
+    service: function (v) { L.service = v; L.err = ""; renderLog(); },
+    delivLog: function (v) { L.delivLog = v; L.err = ""; renderLog(); },
+    drate: function (v) { L.drate = +v; renderLog(); },
+    toDishes: function () { var e = checkSetup(); if (e) return setErr(e); L.cur = 0; go("dish"); },
+    rater: function (v) { L.dishes[L.cur].rater = v; renderLog(); },
+    rating: function (v) { L.dishes[L.cur].rating = +v; renderLog(); },
+    dishBack: function () { if (L.cur > 0) { L.cur--; go("dish"); } else go("setup"); },
+    dishNext: function () { var e = checkDish(L.dishes[L.cur]); if (e) return setErr(e); L.cur++; go("dish"); },
+    addDish: function () { var e = checkDish(L.dishes[L.cur]); if (e) return setErr(e); L.dishes.push(newDish(L.dishes[L.cur].rater)); L.cur = L.dishes.length - 1; go("dish"); },
+    toReview: function () { var e = checkDish(L.dishes[L.cur]); if (e) return setErr(e); go("review"); },
+    editDish: function (v, el) { L.cur = +el.getAttribute("data-i"); go("dish"); },
+    removeDish: function (v, el) { var i = +el.getAttribute("data-i"); if (L.dishes.length > 1) { L.dishes.splice(i, 1); L.cur = Math.min(L.cur, L.dishes.length - 1); } renderLog(); },
+    backToDishes: function () { L.cur = L.dishes.length - 1; go("dish"); },
+    save: function () { saveAll(); },
+    copy: function () { var ta = $("pendingTa"); if (!ta) return; ta.select(); if (navigator.clipboard) navigator.clipboard.writeText(L.pending).catch(function () {}); },
+    again: function () { resetLog(); go("setup"); }
+  };
+  var root = $("logRoot");
+  root.addEventListener("click", function (ev) {
+    var el = ev.target.closest("[data-act]"); if (!el || !root.contains(el) || el.disabled) return;
+    var fn = actions[el.getAttribute("data-act")]; if (fn) fn(el.getAttribute("data-v"), el);
+  });
+  root.addEventListener("input", function (ev) {
+    var t = ev.target, f = t.getAttribute("data-f"), d = t.getAttribute("data-d");
+    if (f && t.type !== "checkbox") { L[f] = t.value; }
+    if (d && t.type !== "checkbox") { L.dishes[L.cur][d] = t.value; }
+  });
+  root.addEventListener("change", function (ev) {
+    var t = ev.target, f = t.getAttribute("data-f"), d = t.getAttribute("data-d");
+    if (t.type === "checkbox" && f === "dnone") { L.dnone = t.checked; var ta = $("f-dcomment"); ta.disabled = t.checked; if (t.checked) { ta.value = ""; L.dcomment = ""; } }
+    if (t.type === "checkbox" && d === "none") { var dd = L.dishes[L.cur]; dd.none = t.checked; var tb = $("d-comment"); tb.disabled = t.checked; if (t.checked) { tb.value = ""; dd.comment = ""; } }
+    if (f === "when") L.when = t.value;
   });
 
   /* ---------- ask forms ---------- */
@@ -414,36 +497,34 @@ html { background: var(--bg); } body { margin: 0; }
     ev.preventDefault(); var q = $("favIn").value.trim(), out = $("favOut"); if (!q) { out.innerHTML = emptyMsg("Enter a dish."); return; }
     var r = Q.favourite(state.entries, q);
     if (!r.matches) { out.innerHTML = noData(); return; }
-    var note = r.ties.length > 1 ? "<div class=\"meta\">" + r.ties.length + " entries tie at " + r.max + " out of 5.</div>" : "";
-    out.innerHTML = '<div class="meta">' + r.matches + " logged · best food rating " + r.max + " out of 5</div>" + note + r.ties.map(function (e) { return entryHtml(e); }).join("");
+    var note = r.ties.length > 1 ? '<div class="meta">' + r.ties.length + " entries tie at " + r.max + " out of 5.</div>" : "";
+    out.innerHTML = '<div class="meta">' + r.matches + " logged · best food rating " + r.max + " out of 5</div>" + note + r.ties.map(entryHtml).join("");
   });
   $("qRest").addEventListener("submit", function (ev) {
     ev.preventDefault(); var q = $("restIn").value.trim(), out = $("restOut"); if (!q) { out.innerHTML = emptyMsg("Enter a restaurant."); return; }
     var r = Q.restaurant(state.entries, q);
     if (!r.count) { out.innerHTML = noData(); return; }
     out.innerHTML = '<div><div class="big">' + r.avg + '</div><div class="meta">average food rating across ' + r.count + (r.count === 1 ? " entry" : " entries") + " for " + h(r.name) + ". Delivery ratings are not included.</div></div>" +
-      r.rows.map(function (e) { return entryHtml(e); }).join("");
+      r.rows.map(entryHtml).join("");
   });
   $("qTop").addEventListener("submit", function (ev) {
     ev.preventDefault(); var n = Math.max(1, Math.min(50, parseInt($("topN").value, 10) || 5)), c = $("topC").value.trim(), out = $("topOut");
     var r = Q.top(state.entries, n, c);
     if (!r.length) { out.innerHTML = noData(); return; }
-    out.innerHTML = r.map(function (e, i) { return '<div class="entry"><div class="meta">#' + (i + 1) + "</div>" + entryHtml(e).replace('<div class="entry">', "<div>") ; }).join("");
+    out.innerHTML = r.map(function (e, i) { return '<div><div class="meta">#' + (i + 1) + "</div>" + entryHtml(e).replace('<div class="entry">', "<div>") + "</div>"; }).join("");
   });
   $("qDel").addEventListener("submit", function (ev) {
     ev.preventDefault(); var out = $("delOut"), r = Q.delivery(state.entries, $("delIn").value);
     if (!r.length) { out.innerHTML = emptyMsg("No delivery ratings recorded" + ($("delIn").value.trim() ? " for that app." : " yet.")); return; }
     out.innerHTML = r.map(function (g) {
-      return '<div class="entry"><div class="top"><b>' + h(g.label) + '</b><span class="big">' + g.avg + '</span></div><div class="meta">' + g.n + (g.n === 1 ? " delivery rating" : " delivery ratings") + (g.n < 3 ? " · too few to call it a verdict" : "") + "</div></div>";
+      return '<div class="entry"><div class="top"><b>' + h(g.label) + '</b><span class="big">' + g.avg + '</span></div><div class="meta">' + g.n + (g.n === 1 ? " order rated" : " orders rated") + (g.n < 3 ? " · too few to call it a verdict" : "") + "</div></div>";
     }).join("");
   });
 
   /* ---------- startup ---------- */
+  resetLog(); renderLog(); fillLists(); renderDiary();
   try { var t = sessionStorage.getItem("cm-tab"); if (t && tabs.indexOf(t) > -1) $("t-" + t).click(); } catch (e) {}
   $("diary").innerHTML = emptyMsg("Loading the diary…");
-
-  try { var w = localStorage.getItem("cm-who"); if (w) $("who").value = w; } catch (e) {}
-  $("who").addEventListener("change", function () { try { localStorage.setItem("cm-who", this.value); } catch (e) {} });
   var loaded = false;
   async function load() {
     try {
@@ -456,6 +537,7 @@ html { background: var(--bg); } body { margin: 0; }
   load();
   document.addEventListener("visibilitychange", function () { if (!document.hidden) load(); });
   setInterval(function () { if (!document.hidden) load(); }, 30000);
+  window.__chezMehQ = Q;
 })();
 </script>
 </body></html>

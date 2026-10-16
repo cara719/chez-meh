@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { COOKIE, verifyToken } from "./lib/auth";
 
-const PUBLIC = ["/login", "/api/login", "/manifest.json", "/icon-192.png", "/icon-512.png", "/favicon.ico"];
+const PUBLIC = ["/login", "/api/login", "/manifest.json", "/icon-192.png", "/icon-512.png", "/apple-touch-icon.png", "/favicon.ico"];
 
 export async function middleware(req) {
   const { pathname } = req.nextUrl;

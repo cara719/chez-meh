@@ -66,6 +66,8 @@ textarea:disabled { opacity: .5; }
 .chip { font: 700 .95rem var(--font-body); color: var(--ink); background: var(--surface); border: 1px solid var(--line); border-radius: 999px; padding: 10px 16px; min-height: 44px; cursor: pointer; }
 .chip[aria-pressed="true"] { background: var(--ink); color: var(--bg); border-color: var(--ink); }
 .chip small { font-weight: 400; opacity: .7; margin-left: 4px; }
+#favForm .field { margin-bottom: 16px; }
+#favForm .link { margin-bottom: 12px; }
 .rate { display: grid; grid-template-columns: repeat(5, 1fr); gap: 8px; }
 .rate button { height: 52px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--ink); font: 500 1.25rem var(--font-mono); cursor: pointer; }
 .rate.food button[aria-pressed="true"] { background: var(--food); border-color: var(--food); color: #fff; }
@@ -127,7 +129,7 @@ html.kb body { padding-bottom: 60vh; }
   </nav>
 
   <div id="status" class="banner" hidden></div>
-  <datalist id="dl-rest"></datalist><datalist id="dl-item"></datalist><datalist id="dl-cuisine"></datalist><datalist id="dl-app"></datalist><datalist id="dl-type"></datalist><datalist id="dl-dishq"></datalist>
+  <datalist id="dl-rest"></datalist><datalist id="dl-item"></datalist><datalist id="dl-cuisine"></datalist><datalist id="dl-app"></datalist><datalist id="dl-type"></datalist>
 
   <section class="panel" id="p-log" role="tabpanel" aria-labelledby="t-log">
     <div id="logRoot" class="flow"></div>
@@ -136,7 +138,7 @@ html.kb body { padding-bottom: 60vh; }
   <section class="panel" id="p-ask" role="tabpanel" aria-labelledby="t-ask" hidden>
     <div class="ask">
       <h2>Best version of a dish</h2>
-      <form id="qFav"><div class="field"><label for="favIn">Dish type <span class="hint">such as Italian sub or ramen</span></label><input type="text" id="favIn" list="dl-dishq" autocomplete="off" placeholder="Italian sub"></div><button class="btn" type="submit">Find</button></form>
+      <div id="favForm"></div>
       <div class="result" id="favOut" aria-live="polite"></div>
     </div>
     <div class="ask">
@@ -197,13 +199,15 @@ html.kb body { padding-bottom: 60vh; }
 
   /* ---------- query logic (spec section 7) ---------- */
   var Q = {
-    versions: function (entries, q) { // every version of a dish type, ranked: one row per restaurant and dish name
-      var k = norm(q), g = {};
+    versions: function (entries, f) { // every version in the chosen cuisines and dish types, ranked: one row per restaurant and dish name
+      var cs = (f && f.cuisines || []).map(norm), ts_ = (f && f.types || []).map(norm), g = {};
+      if (!cs.length && !ts_.length) return [];
       entries.forEach(function (e) {
         if (!Number.isInteger(e.food_rating)) return;
-        if (norm(e.dish_type) !== k && norm(e.item) !== k) return; // match the type, or the dish name for older entries
+        if (cs.length && cs.indexOf(norm(e.cuisine_type)) < 0) return;
+        if (ts_.length && ts_.indexOf(norm(e.dish_type)) < 0) return;
         var key = norm(e.restaurant) + "|" + norm(e.item);
-        var o = g[key] || (g[key] = { restaurant: e.restaurant, item: e.item, type: e.dish_type || "", sum: 0, n: 0, last: -1, lastEntry: null });
+        var o = g[key] || (g[key] = { restaurant: e.restaurant, item: e.item, type: e.dish_type || "", cuisine: e.cuisine_type || "", sum: 0, n: 0, last: -1, lastEntry: null });
         o.sum += e.food_rating; o.n++;
         if (ts(e) >= o.last) { o.last = ts(e); o.lastEntry = e; }
       });
@@ -304,9 +308,9 @@ html.kb body { padding-bottom: 60vh; }
     $("dl-rest").innerHTML = opts(uniq("restaurant"));
     $("dl-item").innerHTML = opts(uniq("item"));
     $("dl-type").innerHTML = opts(uniq("dish_type"));
-    $("dl-dishq").innerHTML = opts(uniq("dish_type").concat(uniq("item")));
     $("dl-cuisine").innerHTML = opts(uniq("cuisine_type", CUISINES));
     $("dl-app").innerHTML = opts(uniq("delivery_app", ["DoorDash", "Uber Eats", "Grubhub"]));
+    renderFav(); // keep the Ask chips in step with every save, edit and delete
   }
   function refresh() {
     fillLists(); renderDiary();
@@ -712,18 +716,47 @@ html.kb body { padding-bottom: 60vh; }
 
   /* ---------- ask forms ---------- */
   function noData() { return emptyMsg("No matching records."); }
-  $("qFav").addEventListener("submit", function (ev) {
-    ev.preventDefault(); var q = $("favIn").value.trim(), out = $("favOut"); if (!q) { out.innerHTML = emptyMsg("Enter a dish type."); return; }
-    var r = Q.versions(state.entries, q);
+  var FV = { cuisines: [], types: [] }; // chosen filters; none chosen = nothing selected yet
+  function pickList(f, within) { // existing values only, most-used first; optionally limited to the chosen cuisines
+    var m = {}, cs = (within || []).map(norm);
+    state.entries.forEach(function (e) {
+      var v = (e[f] || "").trim(); if (!v) return;
+      if (f === "dish_type" && cs.length && cs.indexOf(norm(e.cuisine_type)) < 0) return;
+      var n = norm(v); if (!m[n]) m[n] = { name: v, count: 0 }; m[n].count++;
+    });
+    return Object.keys(m).map(function (x) { return m[x]; }).sort(function (a, b) { return b.count - a.count || (a.name < b.name ? -1 : 1); });
+  }
+  function has(arr, v) { return arr.map(norm).indexOf(norm(v)) > -1; }
+  function renderFav() {
+    var cu = pickList("cuisine_type"), ty = pickList("dish_type", FV.cuisines);
+    FV.types = FV.types.filter(function (t) { return ty.some(function (x) { return norm(x.name) === norm(t); }); }); // drop types that no longer fit the chosen cuisines
+    var s = '<div class="field"><span class="lbl">Cuisine <span class="hint">pick one or more</span></span>' +
+      (cu.length ? '<div class="chips">' + cu.map(function (c) { return chip("fvC", c.name, c.name, has(FV.cuisines, c.name), "<small>" + c.count + "</small>"); }).join("") + "</div>" : '<p class="empty">No cuisines logged yet.</p>') + "</div>" +
+      '<div class="field"><span class="lbl">Dish type <span class="hint">' + (FV.cuisines.length ? "for the chosen cuisines" : "all cuisines") + ", pick one or more</span></span>" +
+      (ty.length ? '<div class="chips">' + ty.map(function (t) { return chip("fvT", t.name, t.name, has(FV.types, t.name), "<small>" + t.count + "</small>"); }).join("") + "</div>" : '<p class="empty">No dish types logged yet.</p>') + "</div>" +
+      ((FV.cuisines.length || FV.types.length) ? '<button type="button" class="link" data-act="fvClear">Clear choices</button>' : "");
+    $("favForm").innerHTML = s;
+    renderFavResults();
+  }
+  function renderFavResults() {
+    var out = $("favOut");
+    if (!FV.cuisines.length && !FV.types.length) { out.innerHTML = emptyMsg("Pick a cuisine, a dish type, or both to see every version ranked."); return; }
+    var r = Q.versions(state.entries, FV);
     if (!r.length) { out.innerHTML = noData(); return; }
     var places = {}; r.forEach(function (x) { places[norm(x.restaurant)] = 1; }); var np = Object.keys(places).length;
     out.innerHTML = '<div class="meta">' + r.length + (r.length === 1 ? " version" : " versions") + " across " + np + (np === 1 ? " restaurant" : " restaurants") + ", best first. Averages are food ratings only.</div>" +
       r.map(function (x, i) {
         var le = x.lastEntry;
         return '<div class="entry"><div class="top"><b>#' + (i + 1) + " " + h(x.item) + '</b><span class="big">' + x.avg + "</span></div>" +
-          '<div class="meta">' + h(x.restaurant) + (x.type ? " · " + h(x.type) : "") + " · " + x.n + (x.n === 1 ? " try" : " tries") + " · last " + fmtDate(le.occurred_at) + "</div>" +
+          '<div class="meta">' + h(x.restaurant) + (x.type ? " · " + h(x.type) : "") + (x.cuisine ? " · " + h(x.cuisine) : "") + " · " + x.n + (x.n === 1 ? " try" : " tries") + " · last " + fmtDate(le.occurred_at) + "</div>" +
           (le.food_comment ? '<p class="cmt">' + h(le.food_comment) + "</p>" : "") + "</div>";
       }).join("");
+  }
+  function toggle(arr, v) { var i = arr.map(norm).indexOf(norm(v)); if (i > -1) arr.splice(i, 1); else arr.push(v); }
+  $("favForm").addEventListener("click", function (ev) {
+    var el = ev.target.closest("[data-act]"); if (!el) return; var a = el.getAttribute("data-act"), v = el.getAttribute("data-v");
+    if (a === "fvC") toggle(FV.cuisines, v); else if (a === "fvT") toggle(FV.types, v); else if (a === "fvClear") FV = { cuisines: [], types: [] }; else return;
+    renderFav();
   });
   $("qRest").addEventListener("submit", function (ev) {
     ev.preventDefault(); var q = $("restIn").value.trim(), out = $("restOut"); if (!q) { out.innerHTML = emptyMsg("Enter a restaurant."); return; }

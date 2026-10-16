@@ -17,22 +17,29 @@ const r = Q.restaurant(E, "a"); assert.equal(r.count, 3); assert.equal(r.avg, "4
 assert.deepEqual(Q.top(E, 3).map((e) => e.item), ["Tonkotsu ramen", "ramen ", "Ramen"]);
 assert.equal(Q.top(E, 5, "japanese").length, 2);
 const g = Q.delivery(E, ""); assert.equal(g.length, 2); assert.equal(g[1].label, "DoorDash"); assert.equal(g[1].avg, "3.00"); assert.equal(g[1].n, 2);
-assert.deepEqual(Q.versions([], "x"), []);
-// Best version of a dish type: one row per restaurant and dish name, ranked by average, then tries, then recency.
+assert.deepEqual(Q.versions([], { types: ["x"] }), []);
+// Best version: filter by any of the chosen cuisines and dish types; one row per restaurant and dish name, ranked by average, then tries, then recency.
 const S = [
-  { item: "The Stallion", dish_type: "Italian sub", restaurant: "Sub Shop", food_rating: 5, occurred_at: d("01") },
-  { item: "the stallion", dish_type: "italian sub", restaurant: "sub shop", food_rating: 4, occurred_at: d("09") },
-  { item: "Italian Special", dish_type: "Italian sub", restaurant: "Deli Two", food_rating: 4, occurred_at: d("05") },
-  { item: "Italian Special", dish_type: "Italian sub", restaurant: "Deli Two", food_rating: 5, occurred_at: d("06") },
-  { item: "Meatball Sub", dish_type: "Meatball sub", restaurant: "Deli Two", food_rating: 5, occurred_at: d("07") },
-  { item: "Italian sub", restaurant: "Old Place", food_rating: 2, occurred_at: d("02") }, // older entry: matches by dish name
+  { item: "The Stallion", dish_type: "Italian sub", cuisine_type: "Italian", restaurant: "Sub Shop", food_rating: 5, occurred_at: d("01") },
+  { item: "The Stallion", dish_type: "Italian sub", cuisine_type: "Italian", restaurant: "Sub Shop", food_rating: 4, occurred_at: d("09") },
+  { item: "Italian Special", dish_type: "ITALIAN SUB", cuisine_type: "italian", restaurant: "Deli Two", food_rating: 4, occurred_at: d("10") },
+  { item: "Italian Special", dish_type: "Italian sub", cuisine_type: "Italian", restaurant: "Deli Two", food_rating: 5, occurred_at: d("11") },
+  { item: "Old Sub", dish_type: "Italian sub", cuisine_type: "Italian", restaurant: "Old Place", food_rating: 2, occurred_at: d("02") },
+  { item: "Meatball Sub", dish_type: "Meatball sub", cuisine_type: "Italian", restaurant: "Deli Two", food_rating: 5, occurred_at: d("07") },
+  { item: "Pad Thai", dish_type: "Pad thai", cuisine_type: "Thai", restaurant: "Bangkok Bowl", food_rating: 4, occurred_at: d("08") },
+  { item: "Mystery", cuisine_type: "Italian", restaurant: "Untyped Cafe", food_rating: 3, occurred_at: d("03") }, // no type yet
 ];
-const v = Q.versions(S, "ITALIAN SUB");
+const v = Q.versions(S, { types: ["ITALIAN SUB"] });
 assert.equal(v.length, 3);
-assert.deepEqual(v.map((x) => x.item), ["The Stallion", "Italian Special", "Italian sub"]); // both 4.50 with 2 tries: the more recent one ranks first
+assert.deepEqual(v.map((x) => x.item), ["Italian Special", "The Stallion", "Old Sub"]); // both 4.50 with 2 tries: the more recent one ranks first
 assert.deepEqual(v.map((x) => x.avg), ["4.50", "4.50", "2.00"]);
 assert.equal(v[0].n, 2); assert.equal(v[2].restaurant, "Old Place");
-assert.equal(Q.versions(S, "meatball sub").length, 1);
+assert.equal(Q.versions(S, { types: ["Italian sub", "Pad thai"] }).length, 4); // several types at once
+assert.equal(Q.versions(S, { cuisines: ["Italian"] }).length, 5); // a cuisine alone: every typed and untyped Italian dish
+assert.equal(Q.versions(S, { cuisines: ["Italian", "Thai"] }).length, 6); // several cuisines
+assert.equal(Q.versions(S, { cuisines: ["Thai"], types: ["Italian sub"] }).length, 0); // both filters must match
+assert.deepEqual(Q.versions(S, { cuisines: ["Italian"], types: ["Meatball sub", "Pad thai"] }).map((x) => x.item), ["Meatball Sub"]);
+assert.deepEqual(Q.versions(S, {}), []); // nothing chosen shows nothing
 // Two dishes from one order share a visit_id, so the delivery rating counts once.
 const V = [
   { entry_id: "a1", visit_id: "v1", food_rating: 5, delivery_app: "DoorDash", delivery_rating: 4, occurred_at: d("15") },
